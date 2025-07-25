@@ -1,8 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// This is your Prisma schema file
+// Docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -15,30 +12,51 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String      @id @default(uuid())
+  email        String      @unique
   passwordHash String
-  signupDate   DateTime @default(now())
-  lifetimeFree Boolean  @default(false)
+  signupDate   DateTime    @default(now())
+  lifetimeFree Boolean     @default(false)
+
+  studyRooms   StudyRoom[] @relation("CreatedRooms")
+  messages     Message[]
 }
 
 model StudyRoom {
-  id              String   @id @default(uuid())
+  id              String     @id @default(uuid())
   name            String
   subject         String
   maxParticipants Int
-  isPrivate       Boolean  @default(false)
-  createdBy       String
-  createdAt       DateTime @default(now())
-  participants    String[] // store user IDs for simplicity
+  isPrivate       Boolean    @default(false)
+  createdById     String
+  createdAt       DateTime   @default(now())
+
+  createdBy       User       @relation("CreatedRooms", fields: [createdById], references: [id])
+  participants    Participant[]
   messages        Message[]
 }
 
 model Message {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
+  content   String
+  createdAt DateTime  @default(now())
+
   roomId    String
   userId    String
-  content   String
-  createdAt DateTime @default(now())
+
   StudyRoom StudyRoom @relation(fields: [roomId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+}
+
+model Participant {
+  id        String     @id @default(uuid())
+  userId    String
+  roomId    String
+
+  user      User       @relation(fields: [userId], references: [id])
+  room      StudyRoom  @relation(fields: [roomId], references: [id])
+
+  joinedAt  DateTime   @default(now())
+
+  @@unique([userId, roomId]) // Prevent same user joining the same room multiple times
 }
