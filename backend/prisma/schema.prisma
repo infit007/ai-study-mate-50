@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  // Removed custom output path to fix deployment on platforms like Render
 }
 
 datasource db {
@@ -17,7 +17,7 @@ model User {
 
   studyRooms   StudyRoom[]   @relation("CreatedRooms")
   messages     Message[]
-  participants Participant[] // 👈 Add this line
+  participants Participant[]
 }
 
 model StudyRoom {
