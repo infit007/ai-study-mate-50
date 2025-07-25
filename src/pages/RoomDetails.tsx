@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 
-const API_URL = "http://localhost:5000/api";
-const SOCKET_URL = "http://localhost:5000";
+const API_URL = "https://ai-study-mate-50.onrender.com/api";
+const SOCKET_URL = "https://ai-study-mate-50.onrender.com";
 
 const socket = io(SOCKET_URL);
 
@@ -46,8 +46,31 @@ const RoomDetails = () => {
     // Join room via socket
     socket.emit("joinRoom", id);
     // Listen for new messages
-    socket.on("chatMessage", (msg) => {
-      setMessages((prev) => [...prev, msg]);
+    socket.on('chatMessage', async ({ roomId, userId, content }) => {
+      // Save user message as usual
+      const message = await prisma.message.create({ data: { roomId, userId, content } });
+      // Emit user message
+      // ...
+
+      // If message is for AI
+      if (content.startsWith('/ai') || content.startsWith('@ai')) {
+        const question = content.replace(/^\/ai|@ai/, '').trim();
+        // Call OpenAI API
+        const aiResponse = await getAIResponse(question);
+        // Save AI message
+        const aiUser = await prisma.user.findUnique({ where: { email: 'ai@studysync.com' } });
+        const aiMessage = await prisma.message.create({
+          data: { roomId, userId: aiUser.id, content: aiResponse }
+        });
+        // Emit AI message
+        io.to(roomId).emit('chatMessage', {
+          id: aiMessage.id,
+          userId: aiUser.id,
+          userName: 'AI Assistant',
+          content: aiResponse,
+          createdAt: aiMessage.createdAt,
+        });
+      }
     });
     return () => {
       socket.off("chatMessage");
