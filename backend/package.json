@@ -4,8 +4,8 @@
   "description": "AI Study Mate backend",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "postinstall": "prisma generate"
+    "generate": "prisma generate",
+    "start": "node index.js"
   },
   "keywords": [],
   "author": "",
