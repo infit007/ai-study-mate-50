@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { BookOpen, Menu, X } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200">
@@ -37,8 +39,8 @@ const Navigation = () => {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
-            <Button variant="ghost">Sign In</Button>
-            <Button variant="default">Get Started</Button>
+            <Button variant="ghost" onClick={() => navigate("/login")}>Sign In</Button>
+            <Button variant="default" onClick={() => navigate("/register")}>Get Started</Button>
           </div>
 
           {/* Mobile Menu Button */}
@@ -70,8 +72,8 @@ const Navigation = () => {
               About
             </a>
             <div className="flex flex-col gap-3 pt-4 border-t border-gray-200">
-              <Button variant="ghost" className="justify-start">Sign In</Button>
-              <Button variant="default" className="justify-start">Get Started</Button>
+              <Button variant="ghost" className="justify-start" onClick={() => navigate("/login")}>Sign In</Button>
+              <Button variant="default" className="justify-start" onClick={() => navigate("/register")}>Get Started</Button>
             </div>
           </div>
         )}
