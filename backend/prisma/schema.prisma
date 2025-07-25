@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  // Removed custom output path to fix deployment on platforms like Render
+  
 }
 
 datasource db {
