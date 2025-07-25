@@ -27,8 +27,8 @@ function isLifetimeFree(signupDate) {
 
 // Register route
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
+  const { name, email, password } = req.body;
+  if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password required.' });
   try {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return res.status(409).json({ error: 'Email already registered.' });
@@ -37,10 +37,10 @@ app.post('/api/auth/register', async (req, res) => {
     // Lifetime free if signup is within 3 months from today
     const lifetimeFree = isLifetimeFree(signupDate);
     const user = await prisma.user.create({
-      data: { email, passwordHash, signupDate, lifetimeFree },
+      data: { name, email, passwordHash, signupDate, lifetimeFree },
     });
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ user: { id: user.id, email: user.email, lifetimeFree: user.lifetimeFree }, token });
+    res.json({ user: { id: user.id, email: user.email, name: user.name, lifetimeFree: user.lifetimeFree }, token });
   } catch (err) {
     res.status(500).json({ error: 'Registration failed.' });
   }
@@ -56,7 +56,7 @@ app.post('/api/auth/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials.' });
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ user: { id: user.id, email: user.email, lifetimeFree: user.lifetimeFree }, token });
+    res.json({ user: { id: user.id, email: user.email, name: user.name, lifetimeFree: user.lifetimeFree }, token });
   } catch (err) {
     res.status(500).json({ error: 'Login failed.' });
   }
@@ -80,9 +80,23 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.userId } });
     if (!user) return res.status(404).json({ error: 'User not found.' });
-    res.json({ user: { id: user.id, email: user.email, lifetimeFree: user.lifetimeFree } });
+    res.json({ user: { id: user.id, email: user.email, name: user.name, lifetimeFree: user.lifetimeFree } });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch user.' });
+  }
+});
+
+// Update user name
+app.put('/api/auth/me', authMiddleware, async (req, res) => {
+  const { name } = req.body;
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { name },
+    });
+    res.json({ user: { id: user.id, email: user.email, name: user.name, lifetimeFree: user.lifetimeFree } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update user.' });
   }
 });
 
@@ -91,6 +105,7 @@ app.get('/api/rooms', async (req, res) => {
   try {
     const rooms = await prisma.studyRoom.findMany({
       orderBy: { createdAt: 'desc' },
+      include: { participants: true },
     });
     res.json({ rooms });
   } catch (err) {
@@ -109,12 +124,22 @@ app.post('/api/rooms', authMiddleware, async (req, res) => {
         subject,
         maxParticipants: Number(maxParticipants),
         isPrivate,
-        createdBy: req.userId,
-        participants: [req.userId],
+        createdById: req.userId,
+        participants: {
+          create: [
+            {
+              userId: req.userId,
+            },
+          ],
+        },
+      },
+      include: {
+        participants: true,
       },
     });
     res.json({ room });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to create room.' });
   }
 });
@@ -148,6 +173,41 @@ app.get('/api/rooms/:id/messages', async (req, res) => {
     res.json({ messages });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch messages.' });
+  }
+});
+
+// Edit a study room
+app.put('/api/rooms/:id', authMiddleware, async (req, res) => {
+  const roomId = req.params.id;
+  const { name, subject, maxParticipants, isPrivate } = req.body;
+  try {
+    const room = await prisma.studyRoom.findUnique({ where: { id: roomId } });
+    if (!room) return res.status(404).json({ error: 'Room not found.' });
+    if (room.createdById !== req.userId) return res.status(403).json({ error: 'Not authorized.' });
+
+    const updated = await prisma.studyRoom.update({
+      where: { id: roomId },
+      data: { name, subject, maxParticipants, isPrivate },
+    });
+    res.json({ room: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update room.' });
+  }
+});
+
+// Delete a study room
+app.delete('/api/rooms/:id', authMiddleware, async (req, res) => {
+  const roomId = req.params.id;
+  try {
+    // Only allow the creator to delete
+    const room = await prisma.studyRoom.findUnique({ where: { id: roomId } });
+    if (!room) return res.status(404).json({ error: 'Room not found.' });
+    if (room.createdById !== req.userId) return res.status(403).json({ error: 'Not authorized.' });
+
+    await prisma.studyRoom.delete({ where: { id: roomId } });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete room.' });
   }
 });
 

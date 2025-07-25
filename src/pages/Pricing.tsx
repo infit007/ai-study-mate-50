@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import BackToDashboard from "@/components/BackToDashboard";
 
 const Pricing = () => {
   const [lifetimeFree, setLifetimeFree] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const user = localStorage.getItem("user");
@@ -10,12 +12,14 @@ const Pricing = () => {
       const parsed = JSON.parse(user);
       setLifetimeFree(!!parsed.lifetimeFree);
       setUserEmail(parsed.email);
+      setIsLoggedIn(true);
     }
   }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="bg-white p-8 rounded shadow-md w-full max-w-2xl space-y-8">
+        {isLoggedIn && <BackToDashboard />}
         <h2 className="text-3xl font-bold mb-4 text-center">Pricing</h2>
         {lifetimeFree && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded text-center mb-6">

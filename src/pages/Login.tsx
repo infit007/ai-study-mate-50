@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
@@ -8,6 +9,8 @@ const Login = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,6 +30,7 @@ const Login = () => {
       // Store token and user info as needed
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
+      navigate("/"); // <--- Add this
       // Optionally redirect or update UI
     } catch (err) {
       setError(err.message);
@@ -36,7 +40,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded shadow-md w-full max-w-md space-y-6">
         <h2 className="text-2xl font-bold mb-4">Login</h2>
         {error && <div className="text-red-500">{error}</div>}
@@ -69,6 +73,9 @@ const Login = () => {
           {loading ? "Logging in..." : "Login"}
         </button>
       </form>
+      <div className="mt-6 text-center">
+        <Link to="/" className="text-blue-600 hover:underline">&larr; Back to Home</Link>
+      </div>
     </div>
   );
 };

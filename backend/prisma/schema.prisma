@@ -5,7 +5,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("postgresql://postgres:Supab@975677@db.itccthxorkcnaswlpytn.supabase.co:5432/postgres")
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -14,6 +14,7 @@ model User {
   passwordHash String
   signupDate   DateTime      @default(now())
   lifetimeFree Boolean       @default(false)
+  name         String?
 
   studyRooms   StudyRoom[]   @relation("CreatedRooms")
   messages     Message[]
