@@ -169,8 +169,15 @@ app.get('/api/rooms/:id/messages', async (req, res) => {
     const messages = await prisma.message.findMany({
       where: { roomId },
       orderBy: { createdAt: 'asc' },
+      include: { user: true },
     });
-    res.json({ messages });
+    res.json({ messages: messages.map(msg => ({
+      id: msg.id,
+      userId: msg.userId,
+      userName: msg.user ? msg.user.name : "Unknown",
+      content: msg.content,
+      createdAt: msg.createdAt,
+    })) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch messages.' });
   }
