@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 
 const API_URL = "http://localhost:5000/api";
@@ -16,6 +16,7 @@ const RoomDetails = () => {
   const [error, setError] = useState("");
   const user = JSON.parse(localStorage.getItem("user") || "null");
   const messagesEndRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!id) return;
@@ -82,7 +83,9 @@ const RoomDetails = () => {
         <div className="flex-1 overflow-y-auto mb-4" style={{ maxHeight: 300 }}>
           {messages.map((msg) => (
             <div key={msg.id} className={`mb-2 ${msg.userId === user?.id ? "text-right" : "text-left"}`}>
-              <span className="font-semibold text-blue-700">{msg.userId === user?.id ? "You" : msg.userId}</span>: {msg.content}
+              <span className="font-semibold text-blue-700">
+                {msg.userId === user?.id ? "You" : (msg.userName || msg.userId)}
+              </span>: {msg.content}
               <div className="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleTimeString()}</div>
             </div>
           ))}
@@ -99,6 +102,15 @@ const RoomDetails = () => {
           />
           <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">Send</button>
         </form>
+      </div>
+      <div className="flex justify-center mt-8">
+        <button
+          type="button"
+          className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition"
+          onClick={() => navigate("/")}
+        >
+          Go to Dashboard
+        </button>
       </div>
     </div>
   );

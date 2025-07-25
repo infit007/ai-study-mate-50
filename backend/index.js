@@ -229,9 +229,12 @@ io.on('connection', (socket) => {
     const message = await prisma.message.create({
       data: { roomId, userId, content },
     });
+    // Fetch the user's name
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     io.to(roomId).emit('chatMessage', {
       id: message.id,
       userId: message.userId,
+      userName: user ? user.name : "Unknown",
       content: message.content,
       createdAt: message.createdAt,
     });
