@@ -1,6 +1,3 @@
-// This is your Prisma schema file
-// Docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
   output   = "../generated/prisma"
@@ -12,26 +9,27 @@ datasource db {
 }
 
 model User {
-  id           String      @id @default(uuid())
-  email        String      @unique
+  id           String        @id @default(uuid())
+  email        String        @unique
   passwordHash String
-  signupDate   DateTime    @default(now())
-  lifetimeFree Boolean     @default(false)
+  signupDate   DateTime      @default(now())
+  lifetimeFree Boolean       @default(false)
 
-  studyRooms   StudyRoom[] @relation("CreatedRooms")
+  studyRooms   StudyRoom[]   @relation("CreatedRooms")
   messages     Message[]
+  participants Participant[] // 👈 Add this line
 }
 
 model StudyRoom {
-  id              String     @id @default(uuid())
+  id              String        @id @default(uuid())
   name            String
   subject         String
   maxParticipants Int
-  isPrivate       Boolean    @default(false)
+  isPrivate       Boolean       @default(false)
   createdById     String
-  createdAt       DateTime   @default(now())
+  createdAt       DateTime      @default(now())
 
-  createdBy       User       @relation("CreatedRooms", fields: [createdById], references: [id])
+  createdBy       User          @relation("CreatedRooms", fields: [createdById], references: [id])
   participants    Participant[]
   messages        Message[]
 }
