@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "scripts": {
     "generate": "prisma generate",
+    "migrate": "prisma migrate deploy",
     "postinstall": "prisma generate",
-    "start": "node index.js"
+    "start": "npx prisma migrate deploy && node index.js"
   },
   "dependencies": {
     "express": "^4.18.2",

@@ -20,10 +20,79 @@ async function testDatabaseConnection() {
   try {
     await prisma.$connect();
     console.log('✅ Database connection successful');
+    
+    // Try to create tables if they don't exist
+    await setupDatabase();
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);
     console.error('Please check your DATABASE_URL environment variable');
     console.error('Current DATABASE_URL:', process.env.DATABASE_URL ? 'Set (hidden for security)' : 'Not set');
+  }
+}
+
+// Setup database tables
+async function setupDatabase() {
+  try {
+    console.log('🔧 Setting up database tables...');
+    
+    // Check if User table exists
+    const tables = await prisma.$queryRaw`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'User'
+    `;
+    
+    if (tables.length === 0) {
+      console.log('📋 Creating database tables...');
+      // Run migrations manually
+      await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "User" (
+        "id" TEXT NOT NULL,
+        "email" TEXT NOT NULL,
+        "passwordHash" TEXT NOT NULL,
+        "signupDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "lifetimeFree" BOOLEAN NOT NULL DEFAULT false,
+        "name" TEXT,
+        CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+      )`;
+      
+      await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email")`;
+      
+      await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "StudyRoom" (
+        "id" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "subject" TEXT NOT NULL,
+        "maxParticipants" INTEGER NOT NULL,
+        "isPrivate" BOOLEAN NOT NULL DEFAULT false,
+        "createdById" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "StudyRoom_pkey" PRIMARY KEY ("id")
+      )`;
+      
+      await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "Message" (
+        "id" TEXT NOT NULL,
+        "content" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "roomId" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        CONSTRAINT "Message_pkey" PRIMARY KEY ("id")
+      )`;
+      
+      await prisma.$executeRaw`CREATE TABLE IF NOT EXISTS "Participant" (
+        "id" TEXT NOT NULL,
+        "userId" TEXT NOT NULL,
+        "roomId" TEXT NOT NULL,
+        "joinedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Participant_pkey" PRIMARY KEY ("id")
+      )`;
+      
+      await prisma.$executeRaw`CREATE UNIQUE INDEX IF NOT EXISTS "Participant_userId_roomId_key" ON "Participant"("userId", "roomId")`;
+      
+      console.log('✅ Database tables created successfully');
+    } else {
+      console.log('✅ Database tables already exist');
+    }
+  } catch (error) {
+    console.error('❌ Database setup failed:', error);
   }
 }
 
@@ -81,6 +150,27 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Database initialization endpoint
+app.post('/api/init-db', async (req, res) => {
+  try {
+    console.log('Initializing database...');
+    await prisma.$executeRaw`CREATE SCHEMA IF NOT EXISTS public`;
+    console.log('Database initialized successfully');
+    res.json({ 
+      status: 'success', 
+      message: 'Database initialized',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Database initialization failed:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Helper to check if signup is within 3 months
 function isLifetimeFree(signupDate) {
   const threeMonthsAgo = new Date();
@@ -105,8 +195,14 @@ app.post('/api/auth/register', async (req, res) => {
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ user, token });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Registration failed.' });
+    console.error('Registration error:', err);
+    if (err.message.includes('Can\'t reach database server')) {
+      res.status(503).json({ error: 'Database connection failed. Please try again later.' });
+    } else if (err.message.includes('relation "User" does not exist')) {
+      res.status(503).json({ error: 'Database not initialized. Please try again in a moment.' });
+    } else {
+      res.status(500).json({ error: 'Registration failed. Please try again.' });
+    }
   }
 });
 
