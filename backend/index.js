@@ -39,7 +39,11 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:3000',
     'https://ai-study-mate-50.vercel.app',
-    'https://ai-study-mate-50-y3wf.vercel.app'
+    'https://ai-study-mate-50-y3wf.vercel.app',
+
+    'https://ai-study-mate-50-y3wf.vercel.app/login',
+    'https://ai-study-mate-50.vercel.app/login'
+
   ], 
   credentials: true 
 }));
