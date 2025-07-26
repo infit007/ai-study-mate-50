@@ -15,7 +15,7 @@ To fix the production deployment, you need to set these environment variables in
 ### 🗄️ Database Configuration
 ```bash
 # Replace with your actual PostgreSQL connection string from Render PostgreSQL service
-DATABASE_URL=postgresql://username:password@host:port/database?sslmode=require
+DATABASE_URL=postgresql://postgres:Supab975677@host:port/database?sslmode=require
 ```
 
 ### 🔐 Authentication
