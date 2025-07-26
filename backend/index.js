@@ -6,6 +6,8 @@ const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 const http = require('http');
 const { Server } = require('socket.io');
+const { getAIResponse } = require('./services/aiService');
+const { detectSubject, enhancePrompt, getCustomizedSystemMessage } = require('./services/stemEnhancer');
 
 // Load env variables
 dotenv.config();
@@ -15,7 +17,7 @@ const prisma = new PrismaClient();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || '*',
+    origin: 'http://localhost:8080',
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -25,7 +27,7 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL || '*', credentials: true }));
+app.use(cors({ origin: 'http://localhost:8080', credentials: true }));
 app.use(express.json());
 
 // Helper to check if signup is within 3 months
@@ -173,6 +175,82 @@ app.post('/api/rooms/:id/join', authMiddleware, async (req, res) => {
   }
 });
 
+// Update room (PUT /api/rooms/:id)
+app.put('/api/rooms/:id', authMiddleware, async (req, res) => {
+  const roomId = req.params.id;
+  const { name, subject, maxParticipants, isPrivate } = req.body;
+  
+  try {
+    // Check if user is the room creator
+    const room = await prisma.studyRoom.findUnique({
+      where: { id: roomId },
+    });
+    
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found.' });
+    }
+    
+    if (room.createdById !== req.userId) {
+      return res.status(403).json({ error: 'Only the room creator can edit this room.' });
+    }
+    
+    const updatedRoom = await prisma.studyRoom.update({
+      where: { id: roomId },
+      data: {
+        name,
+        subject,
+        maxParticipants: parseInt(maxParticipants),
+        isPrivate: !!isPrivate,
+      },
+      include: { participants: true },
+    });
+    
+    res.json({ room: updatedRoom });
+  } catch (err) {
+    console.error('Error updating room:', err);
+    res.status(500).json({ error: 'Failed to update room.' });
+  }
+});
+
+// Delete room (DELETE /api/rooms/:id)
+app.delete('/api/rooms/:id', authMiddleware, async (req, res) => {
+  const roomId = req.params.id;
+  
+  try {
+    // Check if user is the room creator
+    const room = await prisma.studyRoom.findUnique({
+      where: { id: roomId },
+    });
+    
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found.' });
+    }
+    
+    if (room.createdById !== req.userId) {
+      return res.status(403).json({ error: 'Only the room creator can delete this room.' });
+    }
+    
+    // Delete related data first (participants, messages)
+    await prisma.participant.deleteMany({
+      where: { roomId },
+    });
+    
+    await prisma.message.deleteMany({
+      where: { roomId },
+    });
+    
+    // Delete the room
+    await prisma.studyRoom.delete({
+      where: { id: roomId },
+    });
+    
+    res.json({ success: true, message: 'Room deleted successfully.' });
+  } catch (err) {
+    console.error('Error deleting room:', err);
+    res.status(500).json({ error: 'Failed to delete room.' });
+  }
+});
+
 app.get('/api/rooms/:id/messages', async (req, res) => {
   const roomId = req.params.id;
   try {
@@ -197,8 +275,45 @@ app.get('/api/rooms/:id/messages', async (req, res) => {
 
 // ------------------------ Chat + Socket.IO ------------------------
 
-function getAIResponse(prompt) {
-  return Promise.resolve(`AI says: This is a sample answer to: "${prompt}"`);
+/**
+ * Get AI response with context from the study room
+ * @param {string} prompt - The user's question
+ * @param {string} roomId - The ID of the study room
+ * @returns {Promise<string>} - The AI's response
+ */
+async function getAIResponseWithContext(prompt, roomId) {
+  try {
+    // Get recent messages from this room for context (last 5 messages)
+    const recentMessages = await prisma.message.findMany({
+      where: { roomId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { user: true }
+    });
+    
+    // Format messages for context
+    const messageHistory = recentMessages
+      .reverse()
+      .map(msg => ({
+        role: msg.user.email === 'ai@studysync.com' ? 'assistant' : 'user',
+        content: msg.content.replace(/^\/ai|@ai/, '').trim()
+      }));
+    
+    // Detect subject and enhance prompt
+    const subject = detectSubject(prompt);
+    const enhancedPrompt = enhancePrompt(prompt, subject);
+    
+    // Get customized system message
+    const baseSystemMessage = `You are a chill, friendly AI who loves casual conversation. When someone says "hello" or "hey", just respond naturally like a friend would - no need to immediately offer academic help or list STEM topics. You can chat about anything: movies, music, life, random thoughts, or yes, studies too if they want. Be conversational and relaxed. Don't be overly helpful or formal - just be a cool chat companion who happens to be smart.`;
+    
+    const customizedSystemMessage = getCustomizedSystemMessage(baseSystemMessage, subject);
+    
+    // Get AI response with context and customized system message
+    return await getAIResponse(enhancedPrompt, messageHistory, customizedSystemMessage);
+  } catch (error) {
+    console.error('Error getting AI response with context:', error);
+    return `AI Assistant: I'm having trouble processing your request. Please try again.`;
+  }
 }
 
 io.on('connection', (socket) => {
@@ -223,7 +338,8 @@ io.on('connection', (socket) => {
     // AI response
     if (content.startsWith('/ai') || content.startsWith('@ai')) {
       const question = content.replace(/^\/ai|@ai/, '').trim();
-      const aiResponse = await getAIResponse(question);
+      console.log(`AI question received in room ${roomId}: ${question}`);
+      const aiResponse = await getAIResponseWithContext(question, roomId);
 
       let aiUser = await prisma.user.findUnique({ where: { email: 'ai@studysync.com' } });
       if (!aiUser) {
