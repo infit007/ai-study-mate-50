@@ -21,7 +21,8 @@ const io = new Server(server, {
       'http://localhost:8080',
       'http://localhost:5173',
       'http://localhost:3000',
-      'https://ai-study-mate-50.vercel.app'
+      'https://ai-study-mate-50.vercel.app',
+      'https://ai-study-mate-50-y3wf.vercel.app'
     ],
     methods: ['GET', 'POST'],
     credentials: true,
@@ -37,7 +38,8 @@ app.use(cors({
     'http://localhost:8080',
     'http://localhost:5173',
     'http://localhost:3000',
-    'https://ai-study-mate-50.vercel.app'
+    'https://ai-study-mate-50.vercel.app',
+    'https://ai-study-mate-50-y3wf.vercel.app'
   ], 
   credentials: true 
 }));

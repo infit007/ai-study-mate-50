@@ -37,6 +37,13 @@ OPENAI_API_KEY=sk-proj-PxBHrEot-ijw2_iAK_B3xXmMl3gFbqrm0TNw8J0aFdZVyG9Z0UCSlK0TX
 PORT=5000
 ```
 
+### 🎨 Frontend Environment Variables (Vercel)
+```bash
+# Set this in your Vercel project environment variables
+VITE_API_URL=https://ai-study-mate-50.onrender.com/api
+VITE_SOCKET_URL=https://ai-study-mate-50.onrender.com
+```
+
 ---
 
 ## 🛠️ Step-by-Step Render Deployment Fix
@@ -97,13 +104,15 @@ npm run dev
 
 ## 📊 Environment Variable Summary
 
-| Variable | Local (SQLite) | Production (PostgreSQL) |
-|----------|---------------|------------------------|
-| DATABASE_URL | `file:./dev.db` | `postgresql://...` |
-| JWT_SECRET | Same value | Same value |
-| GROQ_API_KEY | Same value | Same value |
-| OPENAI_API_KEY | Same value | Same value |
-| PORT | 5000 | 5000 |
+| Variable | Local (SQLite) | Production (PostgreSQL) | Frontend (Vercel) |
+|----------|---------------|------------------------|-------------------|
+| DATABASE_URL | `file:./dev.db` | `postgresql://...` | N/A |
+| JWT_SECRET | Same value | Same value | N/A |
+| GROQ_API_KEY | Same value | Same value | N/A |
+| OPENAI_API_KEY | Same value | Same value | N/A |
+| PORT | 5000 | 5000 | N/A |
+| VITE_API_URL | N/A | N/A | `https://ai-study-mate-50.onrender.com/api` |
+| VITE_SOCKET_URL | N/A | N/A | `https://ai-study-mate-50.onrender.com` |
 
 ---
 
