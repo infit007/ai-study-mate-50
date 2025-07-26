@@ -4,7 +4,38 @@
 
 ### Current Issues Fixed:
 1. ✅ **Missing Dependencies**: Added `openai` and `groq-sdk` to backend/package.json
-2. ❌ **Database Configuration**: Need to set proper PostgreSQL URL in Render environment
+2. ✅ **CORS Configuration**: Fixed cross-origin requests between Vercel and Render
+3. ❌ **Database Configuration**: Need to set proper PostgreSQL URL in Render environment
+
+---
+
+## 🗄️ Database Solutions
+
+### **Option A: Use Render's Built-in PostgreSQL (Recommended)**
+
+This is the easiest and most reliable solution:
+
+1. **Create a new PostgreSQL database on Render:**
+   - Go to Render Dashboard → New → PostgreSQL
+   - Name it something like "ai-study-mate-db"
+   - Choose a plan (Free tier works fine)
+   - Note down the connection string
+
+2. **Update your Render environment variable:**
+   - Use the **Internal Database URL** from Render (not external)
+   - It will look like: `postgresql://username:password@host:port/database`
+
+3. **Run database migrations:**
+   - After setting the DATABASE_URL, redeploy your service
+   - The Prisma migrations will run automatically
+
+### **Option B: Fix Supabase Connection**
+
+If you prefer to keep using Supabase:
+
+1. **Check Supabase database status**
+2. **Verify network restrictions**
+3. **Try a new password without special characters**
 
 ---
 
@@ -14,11 +45,14 @@ To fix the production deployment, you need to set these environment variables in
 
 ### 🗄️ Database Configuration
 ```bash
-# Replace with your actual PostgreSQL connection string from Render PostgreSQL service
-DATABASE_URL=postgresql://postgres:Supab975677@host:port/database?sslmode=require
+# Option A: Render PostgreSQL (Recommended)
+DATABASE_URL=postgresql://username:password@host:port/database
+
+# Option B: Supabase PostgreSQL
+DATABASE_URL=postgresql://postgres:Supab975677@db.itccthxorkcnaswlpytn.supabase.co:5432/postgres
 ```
 
-### 🔐 Authentication
+### �� Authentication
 ```bash
 JWT_SECRET=e0tvejhlt6vw1x66m8baimdjapiskfd3
 ```

@@ -14,6 +14,22 @@ dotenv.config();
 
 const app = express();
 const prisma = new PrismaClient();
+
+// Test database connection on startup
+async function testDatabaseConnection() {
+  try {
+    await prisma.$connect();
+    console.log('✅ Database connection successful');
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message);
+    console.error('Please check your DATABASE_URL environment variable');
+    console.error('Current DATABASE_URL:', process.env.DATABASE_URL ? 'Set (hidden for security)' : 'Not set');
+  }
+}
+
+// Test connection on startup
+testDatabaseConnection();
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
@@ -39,15 +55,31 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:3000',
     'https://ai-study-mate-50.vercel.app',
-    'https://ai-study-mate-50-y3wf.vercel.app',
-
-    'https://ai-study-mate-50-y3wf.vercel.app/login',
-    'https://ai-study-mate-50.vercel.app/login'
-
+    'https://ai-study-mate-50-y3wf.vercel.app'
   ], 
   credentials: true 
 }));
 app.use(express.json());
+
+// Health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ 
+      status: 'healthy', 
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).json({ 
+      status: 'unhealthy', 
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
 
 // Helper to check if signup is within 3 months
 function isLifetimeFree(signupDate) {
@@ -89,8 +121,12 @@ app.post('/api/auth/login', async (req, res) => {
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ user, token });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Login failed.' });
+    console.error('Login error:', err);
+    if (err.message.includes('Can\'t reach database server')) {
+      res.status(503).json({ error: 'Database connection failed. Please try again later.' });
+    } else {
+      res.status(500).json({ error: 'Login failed. Please try again.' });
+    }
   }
 });
 
