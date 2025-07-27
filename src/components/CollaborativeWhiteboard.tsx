@@ -66,6 +66,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [isRenderingImages, setIsRenderingImages] = useState(false);
   const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [whiteboardState, setWhiteboardState] = useState<any>(null);
 
   const colors = [
     '#ef4444', // red
@@ -161,11 +162,28 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     if (!socket) return;
 
     socket.on('whiteboardDraw', (action: DrawingAction) => {
-      drawPath(action.points, action.color, action.brushSize, action.type === 'erase');
+      // Only process if it's from another user
+      if (action.userName !== user?.name) {
+        drawPath(action.points, action.color, action.brushSize, action.type === 'erase');
+      }
     });
 
     socket.on('whiteboardClear', () => {
       clearCanvas();
+    });
+
+    socket.on('whiteboardUndo', (data: { userId: string; userName: string }) => {
+      // Handle undo from other users
+      if (data.userName !== user?.name) {
+        handleUndo();
+      }
+    });
+
+    socket.on('whiteboardRedo', (data: { userId: string; userName: string }) => {
+      // Handle redo from other users
+      if (data.userName !== user?.name) {
+        handleRedo();
+      }
     });
 
     socket.on('whiteboardImageUpload', (data: { 
@@ -196,6 +214,11 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       };
 
       setUploadedImages(prev => [...prev, newImage]);
+      
+      // Render the new image immediately
+      setTimeout(() => {
+        renderBackgroundImages();
+      }, 50);
     });
 
     socket.on('userJoinedWhiteboard', (userName: string) => {
@@ -221,6 +244,26 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       }
     });
 
+    // Request complete whiteboard state when joining
+    socket.on('requestWhiteboardState', () => {
+      const state = saveWhiteboardState();
+      if (state) {
+        socket.emit('whiteboardStateSync', {
+          roomId,
+          state,
+          userId: user?.id,
+          userName: user?.name || 'Anonymous'
+        });
+      }
+    });
+
+    // Receive complete whiteboard state
+    socket.on('whiteboardStateSync', (data: { state: any; userName: string }) => {
+      if (data.userName !== user?.name) {
+        restoreWhiteboardState(data.state);
+      }
+    });
+
     socket.on('userLeftWhiteboard', (userName: string) => {
       setActiveUsers(prev => prev.filter(name => name !== userName));
     });
@@ -237,6 +280,11 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       setUploadedImages(prev => prev.map(img => 
         img.id === data.imageId ? { ...img, x: data.x, y: data.y } : img
       ));
+      
+      // Render the moved image immediately
+      setTimeout(() => {
+        renderBackgroundImages();
+      }, 50);
     });
 
     socket.on('whiteboardImageResize', (data: { 
@@ -252,6 +300,11 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       setUploadedImages(prev => prev.map(img => 
         img.id === data.imageId ? { ...img, x: data.x, y: data.y, width: data.width, height: data.height } : img
       ));
+      
+      // Render the resized image immediately
+      setTimeout(() => {
+        renderBackgroundImages();
+      }, 50);
     });
 
     socket.on('whiteboardImageLock', (data: { 
@@ -279,14 +332,16 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     // Join whiteboard room
     socket.emit('joinWhiteboard', { roomId, userName: user?.name || 'Anonymous' });
     
-    // Request existing images after joining
+    // Request complete whiteboard state after joining
     setTimeout(() => {
-      socket.emit('requestExistingImages', { roomId });
+      socket.emit('requestWhiteboardState', { roomId });
     }, 100);
 
     return () => {
       socket.off('whiteboardDraw');
       socket.off('whiteboardClear');
+      socket.off('whiteboardUndo');
+      socket.off('whiteboardRedo');
       socket.off('whiteboardImageUpload');
       socket.off('whiteboardImageMove');
       socket.off('whiteboardImageResize');
@@ -295,6 +350,8 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       socket.off('userJoinedWhiteboard');
       socket.off('userLeftWhiteboard');
       socket.off('requestExistingImages');
+      socket.off('requestWhiteboardState');
+      socket.off('whiteboardStateSync');
       socket.emit('leaveWhiteboard', { roomId, userName: user?.name || 'Anonymous' });
     };
   }, [socket, roomId, user]);
@@ -509,6 +566,19 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       // Force re-render images after movement/resize
       setTimeout(() => {
         renderImages();
+        
+        // Sync complete state after image operation
+        if (socket) {
+          const state = saveWhiteboardState();
+          if (state) {
+            socket.emit('whiteboardStateSync', {
+              roomId,
+              state,
+              userId: user?.id,
+              userName: user?.name || 'Anonymous'
+            });
+          }
+        }
       }, 10);
       return;
     }
@@ -532,6 +602,21 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
         userName: user?.name || 'Anonymous'
       });
     }
+
+    // Sync complete state after drawing
+    setTimeout(() => {
+      if (socket) {
+        const state = saveWhiteboardState();
+        if (state) {
+          socket.emit('whiteboardStateSync', {
+            roomId,
+            state,
+            userId: user?.id,
+            userName: user?.name || 'Anonymous'
+          });
+        }
+      }
+    }, 100);
 
     setCurrentPath([]);
     currentPathRef.current = [];
@@ -793,6 +878,44 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     }
   };
 
+
+
+  // Restore complete whiteboard state
+  const restoreWhiteboardState = useCallback((state: any) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !state) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Only restore if the incoming state is newer
+    if (whiteboardState && whiteboardState.timestamp > state.timestamp) {
+      return;
+    }
+
+    // Restore canvas data
+    const img = new Image();
+    img.onload = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = state.canvasData;
+
+    // Restore images
+    if (state.images) {
+      setUploadedImages(state.images);
+    }
+
+    // Restore history
+    if (state.history) {
+      setDrawingHistory(state.history);
+      setHistoryIndex(state.historyIndex || 0);
+    }
+
+    // Update local state
+    setWhiteboardState(state);
+  }, [whiteboardState]);
+
   // Render background images (called only when needed)
   const renderBackgroundImages = useCallback(() => {
     const canvas = canvasRef.current;
@@ -801,11 +924,14 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Only render if there are images and we're not currently drawing
+    // Only render if there are images
     if (uploadedImages.length === 0) return;
 
     // Save current canvas state
     ctx.save();
+    
+    // Get current canvas data to preserve drawings
+    const currentCanvasData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     
     // Clear and fill background
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -847,9 +973,33 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       img.src = image.src;
     });
     
+    // Restore drawings on top of images
+    ctx.putImageData(currentCanvasData, 0, 0);
+    
     // Restore canvas state
     ctx.restore();
   }, [uploadedImages]);
+
+  // Save complete whiteboard state
+  const saveWhiteboardState = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+
+    // Ensure images are rendered before saving
+    if (uploadedImages.length > 0) {
+      renderBackgroundImages();
+    }
+
+    const state = {
+      canvasData: canvas.toDataURL(),
+      images: uploadedImages,
+      history: drawingHistory,
+      historyIndex: historyIndex,
+      timestamp: Date.now()
+    };
+
+    return state;
+  }, [uploadedImages, drawingHistory, historyIndex, renderBackgroundImages]);
 
   // Render images on canvas (for image operations)
   const renderImages = useCallback(() => {
@@ -931,6 +1081,25 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       renderBackgroundImages();
     }
   }, []); // Only run once on mount
+
+  // Periodic state sync (every 30 seconds)
+  useEffect(() => {
+    const syncInterval = setInterval(() => {
+      if (socket && uploadedImages.length > 0) {
+        const state = saveWhiteboardState();
+        if (state) {
+          socket.emit('whiteboardStateSync', {
+            roomId,
+            state,
+            userId: user?.id,
+            userName: user?.name || 'Anonymous'
+          });
+        }
+      }
+    }, 30000); // Sync every 30 seconds
+
+    return () => clearInterval(syncInterval);
+  }, [socket, roomId, user, uploadedImages, saveWhiteboardState]);
 
   // Re-render images only when images are added/removed or when image operations complete
   useEffect(() => {
