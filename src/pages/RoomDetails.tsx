@@ -172,7 +172,7 @@ const RoomDetails = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 pb-8">
       <div className="w-full max-w-none mx-auto">
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">{room?.name}</h1>
@@ -183,7 +183,7 @@ const RoomDetails = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 mb-8">
           {/* Main Content Area */}
           <div className={`space-y-4 lg:space-y-6 ${interfaceMode === 'chat' ? 'lg:col-span-3' : 'lg:col-span-4'}`}>
             {/* Interface Toggle */}
@@ -227,7 +227,7 @@ const RoomDetails = () => {
                         </h2>
                       </div>
 
-                      <div className="h-[400px] overflow-y-auto p-3 space-y-2 bg-gradient-to-b from-transparent to-blue-50/30">
+                      <div className="h-[500px] overflow-y-auto p-3 space-y-2 bg-gradient-to-b from-transparent to-blue-50/30">
                         {messages.slice(-10).map((message) => {
                           const isCurrentUser = message.userId === user?.id;
                           const isAI = message.sender === 'AI Assistant' || message.userName === 'AI Assistant';
@@ -521,7 +521,7 @@ const RoomDetails = () => {
         </div>
 
         {/* Pomodoro Timer - Above Navigation */}
-        <div className="mb-6">
+        <div className="mb-8">
           <SyncedPomodoroTimer
             roomId={id!}
             socket={socketRef.current}
