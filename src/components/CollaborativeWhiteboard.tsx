@@ -434,7 +434,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       <div className="relative">
         <canvas
           ref={canvasRef}
-          className="w-full h-64 sm:h-80 md:h-96 border-2 border-gray-200 rounded-lg cursor-crosshair bg-white touch-none"
+          className="w-full h-[500px] border-2 border-gray-200 rounded-lg cursor-crosshair bg-white touch-none"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}

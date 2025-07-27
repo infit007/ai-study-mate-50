@@ -45,7 +45,7 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
   });
   
   const [showSettings, setShowSettings] = useState(false);
-  const [isController, setIsController] = useState(false);
+  const [isController, setIsController] = useState(true); // Default to true so any user can control
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const totalFocusTime = timerState.settings.focusTime * 60;
@@ -62,10 +62,8 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
 
     socket.on('timerControl', (data: { action: string; userId: string }) => {
       console.log('Timer control received:', data);
-      if (data.userId !== user?.id) {
-        // Someone else is controlling the timer
-        setIsController(false);
-      }
+      // Allow all users to control the timer
+      setIsController(true);
     });
 
     socket.on('timerSettingsUpdate', (data: TimerState['settings']) => {
@@ -88,7 +86,7 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
 
   // Timer logic
   useEffect(() => {
-    if (timerState.isRunning && isController) {
+    if (timerState.isRunning) {
       intervalRef.current = setInterval(() => {
         setTimerState(prev => {
           const newTimeLeft = prev.timeLeft - 1;
@@ -135,8 +133,8 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
             lastSyncTime: Date.now()
           };
           
-          // Sync every 5 seconds to keep everyone in sync
-          if (newTimeLeft % 5 === 0) {
+          // Sync every 3 seconds to keep everyone in sync
+          if (newTimeLeft % 3 === 0) {
             socket.emit('timerSync', { roomId, timerState: newState });
           }
           
@@ -154,19 +152,9 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
         clearInterval(intervalRef.current);
       }
     };
-  }, [timerState.isRunning, isController, socket, roomId, onSessionComplete]);
+  }, [timerState.isRunning, socket, roomId, onSessionComplete]);
 
   const toggleTimer = () => {
-    if (!isController) {
-      // Request control
-      socket.emit('timerControl', { 
-        roomId, 
-        action: 'request', 
-        userId: user?.id 
-      });
-      setIsController(true);
-    }
-    
     const newState = {
       ...timerState,
       isRunning: !timerState.isRunning,
@@ -183,15 +171,6 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
   };
 
   const resetTimer = () => {
-    if (!isController) {
-      socket.emit('timerControl', { 
-        roomId, 
-        action: 'request', 
-        userId: user?.id 
-      });
-      setIsController(true);
-    }
-    
     const newState = {
       ...timerState,
       timeLeft: timerState.settings.focusTime * 60,
@@ -210,15 +189,6 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
   };
 
   const skipSession = () => {
-    if (!isController) {
-      socket.emit('timerControl', { 
-        roomId, 
-        action: 'request', 
-        userId: user?.id 
-      });
-      setIsController(true);
-    }
-    
     let newState;
     if (timerState.isBreak) {
       newState = {
@@ -246,15 +216,6 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
   };
 
   const updateSetting = (key: keyof TimerState['settings'], value: number) => {
-    if (!isController) {
-      socket.emit('timerControl', { 
-        roomId, 
-        action: 'request', 
-        userId: user?.id 
-      });
-      setIsController(true);
-    }
-    
     const newSettings = { ...timerState.settings, [key]: value };
     const newState = {
       ...timerState,
@@ -282,19 +243,18 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Timer className="w-5 h-5 text-brand-purple" />
-          <div>
-            <h4 className="font-semibold">Pomodoro Session</h4>
-            <p className="text-sm text-muted-foreground">
-              {isController ? 'You control the timer' : 'Timer controlled by another user'}
-            </p>
-          </div>
+                  <div>
+          <h4 className="font-semibold">Pomodoro Session</h4>
+          <p className="text-sm text-muted-foreground">
+            Collaborative timer - anyone can control
+          </p>
+        </div>
         </div>
         <Button
           variant="outline"
           size="sm"
           onClick={() => setShowSettings(!showSettings)}
           className="flex items-center gap-2"
-          disabled={!isController}
         >
           <Settings className="w-4 h-4" />
           Settings
@@ -302,7 +262,7 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
       </div>
 
       {/* Settings Panel */}
-      {showSettings && isController && (
+      {showSettings && (
         <div className="mb-4 p-4 bg-gray-50 rounded-lg">
           <h5 className="font-medium mb-3">Timer Settings</h5>
           <div className="grid grid-cols-2 gap-4">
@@ -391,7 +351,6 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
           variant={timerState.isRunning ? "outline" : "default"}
           size="lg"
           className="flex items-center gap-2"
-          disabled={!isController}
         >
           {timerState.isRunning ? (
             <>
@@ -411,7 +370,6 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
           variant="outline"
           size="lg"
           className="flex items-center gap-2"
-          disabled={!isController}
         >
           <RotateCcw className="w-5 h-5" />
           Reset
@@ -421,7 +379,6 @@ const SyncedPomodoroTimer: React.FC<SyncedPomodoroTimerProps> = ({
           onClick={skipSession}
           variant="outline"
           size="lg"
-          disabled={!isController}
         >
           Skip
         </Button>

@@ -217,7 +217,7 @@ const RoomDetails = () => {
                     />
                     
                     {/* Chat in sidebar when whiteboard mode is active */}
-                    <div className="flex-1 bg-gradient-to-br from-white/90 to-blue-50/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
+                    <div className="bg-gradient-to-br from-white/90 to-blue-50/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
                       <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-3">
                         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -227,7 +227,7 @@ const RoomDetails = () => {
                         </h2>
                       </div>
 
-                      <div className="h-[300px] overflow-y-auto p-3 space-y-2 bg-gradient-to-b from-transparent to-blue-50/30">
+                      <div className="h-[400px] overflow-y-auto p-3 space-y-2 bg-gradient-to-b from-transparent to-blue-50/30">
                         {messages.slice(-10).map((message) => {
                           const isCurrentUser = message.userId === user?.id;
                           const isAI = message.sender === 'AI Assistant' || message.userName === 'AI Assistant';
