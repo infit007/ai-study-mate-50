@@ -487,6 +487,40 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('userJoined', socket.userName || 'Anonymous');
   });
 
+  // Timer synchronization events
+  socket.on('requestTimerState', ({ roomId }) => {
+    // Send current timer state to the requesting user
+    const roomTimerState = global.roomTimers?.[roomId];
+    if (roomTimerState) {
+      socket.emit('timerSync', roomTimerState);
+    }
+  });
+
+  socket.on('timerSync', ({ roomId, timerState }) => {
+    // Store timer state for the room
+    if (!global.roomTimers) global.roomTimers = {};
+    global.roomTimers[roomId] = timerState;
+    
+    // Broadcast to all users in the room except sender
+    socket.to(roomId).emit('timerSync', timerState);
+  });
+
+  socket.on('timerControl', ({ roomId, action, userId }) => {
+    // Broadcast timer control to all users in the room
+    socket.to(roomId).emit('timerControl', { action, userId });
+  });
+
+  socket.on('timerSettingsUpdate', ({ roomId, settings }) => {
+    // Update timer settings for the room
+    if (!global.roomTimers) global.roomTimers = {};
+    if (global.roomTimers[roomId]) {
+      global.roomTimers[roomId].settings = settings;
+    }
+    
+    // Broadcast settings update to all users in the room
+    socket.to(roomId).emit('timerSettingsUpdate', settings);
+  });
+
   socket.on('chatMessage', async ({ roomId, userId, content }) => {
     const message = await prisma.message.create({
       data: { roomId, userId, content },

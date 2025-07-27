@@ -5,9 +5,10 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import CollaborativeWhiteboard from "@/components/CollaborativeWhiteboard";
-import PomodoroTimer from "@/components/PomodoroTimer";
+import SyncedPomodoroTimer from "@/components/SyncedPomodoroTimer";
 import ParticipantsList from "@/components/ParticipantsList";
 import InterfaceToggle from "@/components/InterfaceToggle";
+import ResizableLayout from "@/components/ResizableLayout";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
@@ -193,12 +194,116 @@ const RoomDetails = () => {
             
             {/* Whiteboard Mode */}
             {interfaceMode === 'whiteboard' && (
-              <CollaborativeWhiteboard 
-                roomId={id!} 
-                socket={socketRef.current} 
-                user={user}
-                isOpen={true}
-                onToggle={() => {}}
+              <ResizableLayout
+                defaultLeftWidth={60}
+                minLeftWidth={40}
+                maxLeftWidth={80}
+                leftComponent={
+                  <CollaborativeWhiteboard 
+                    roomId={id!} 
+                    socket={socketRef.current} 
+                    user={user}
+                    isOpen={true}
+                    onToggle={() => {}}
+                  />
+                }
+                rightComponent={
+                  <div className="h-full flex flex-col">
+                    <ParticipantsList
+                      roomId={id!}
+                      socket={socketRef.current}
+                      user={user}
+                      participants={participants}
+                    />
+                    
+                    {/* Chat in sidebar when whiteboard mode is active */}
+                    <div className="flex-1 mt-4 bg-gradient-to-br from-white/90 to-blue-50/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
+                      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-3">
+                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                          Chat
+                        </h2>
+                      </div>
+
+                      <div className="h-[300px] overflow-y-auto p-3 space-y-2 bg-gradient-to-b from-transparent to-blue-50/30">
+                        {messages.slice(-10).map((message) => {
+                          const isCurrentUser = message.userId === user?.id;
+                          const isAI = message.sender === 'AI Assistant' || message.userName === 'AI Assistant';
+                          const displayName = isAI ? 'AI Assistant' : (message.user?.name || message.userName || user?.name || 'User');
+                          
+                          return (
+                            <div key={message.id} className={`flex items-start gap-2 ${
+                              isCurrentUser ? 'flex-row-reverse' : 'flex-row'
+                            }`}>
+                              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-medium shadow-lg ${
+                                isAI
+                                  ? 'bg-gradient-to-br from-purple-500 to-indigo-600' 
+                                  : isCurrentUser
+                                  ? 'bg-gradient-to-br from-green-500 to-emerald-600'
+                                  : 'bg-gradient-to-br from-blue-500 to-cyan-500'
+                              }`}>
+                                {isAI ? '🤖' : displayName.charAt(0).toUpperCase()}
+                              </div>
+                              <div className={`flex-1 min-w-0 ${isCurrentUser ? 'flex flex-col items-end' : ''}`}>
+                                <div className={`flex items-center gap-1 mb-1 ${
+                                  isCurrentUser ? 'flex-row-reverse' : 'flex-row'
+                                }`}>
+                                  <span className={`text-xs font-semibold ${
+                                    isAI
+                                      ? 'text-purple-600'
+                                      : isCurrentUser 
+                                      ? 'text-green-600'
+                                      : 'text-blue-600'
+                                  }`}>
+                                    {isCurrentUser ? 'You' : displayName}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                  </span>
+                                </div>
+                                <div className={`rounded-lg p-2 shadow-sm border text-xs ${
+                                  isAI
+                                    ? 'bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200/50 text-gray-800'
+                                    : isCurrentUser
+                                    ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200/50 text-gray-800'
+                                    : 'bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200/50 text-gray-800'
+                                }`}>
+                                  <p className="leading-relaxed">{message.content}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div ref={messagesEndRef} />
+                      </div>
+
+                      <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-2 border-t border-white/20">
+                        <form onSubmit={handleSend} className="flex gap-2">
+                          <div className="flex-1 relative">
+                            <input
+                              type="text"
+                              className="w-full bg-white/80 backdrop-blur-sm border border-blue-200/50 rounded-lg px-2 py-1 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent shadow-sm transition-all duration-200 text-xs"
+                              value={input}
+                              onChange={(e) => setInput(e.target.value)}
+                              placeholder="Type your message..."
+                              required
+                            />
+                          </div>
+                          <button 
+                            type="submit" 
+                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-2 py-1 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-1 font-medium text-xs"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                }
               />
             )}
             
@@ -400,7 +505,10 @@ const RoomDetails = () => {
               </div>
             )}
             
-            <PomodoroTimer 
+            <SyncedPomodoroTimer
+              roomId={id!}
+              socket={socketRef.current}
+              user={user}
               onSessionComplete={() => {
                 // Optional: Send notification to chat when session completes
                 if (socketRef.current) {
@@ -414,214 +522,17 @@ const RoomDetails = () => {
             />
           </div>
 
-          {/* Sidebar - Participants and Chat (when in whiteboard mode) */}
-          <div className={`space-y-4 lg:space-y-6 ${interfaceMode === 'chat' ? 'lg:col-span-1' : 'lg:col-span-2'}`}>
-            <ParticipantsList
-              roomId={id!}
-              socket={socketRef.current}
-              user={user}
-              participants={participants}
-            />
-            
-            {/* Chat in sidebar when whiteboard mode is active */}
-            {interfaceMode === 'whiteboard' && (
-              <div className="bg-gradient-to-br from-white/90 to-blue-50/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4">
-                  <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    Chat
-                  </h2>
-                </div>
-
-                <div className="h-[400px] overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-transparent to-blue-50/30">
-                  {messages.map((message) => {
-                    const isCurrentUser = message.userId === user?.id;
-                    const isAI = message.sender === 'AI Assistant' || message.userName === 'AI Assistant';
-                    const displayName = isAI ? 'AI Assistant' : (message.user?.name || message.userName || user?.name || 'User');
-                    
-                    return (
-                      <div key={message.id} className={`flex items-start gap-2 ${
-                        isCurrentUser ? 'flex-row-reverse' : 'flex-row'
-                      }`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium shadow-lg ${
-                          isAI
-                            ? 'bg-gradient-to-br from-purple-500 to-indigo-600' 
-                            : isCurrentUser
-                            ? 'bg-gradient-to-br from-green-500 to-emerald-600'
-                            : 'bg-gradient-to-br from-blue-500 to-cyan-500'
-                        }`}>
-                          {isAI ? '🤖' : displayName.charAt(0).toUpperCase()}
-                        </div>
-                        <div className={`flex-1 min-w-0 ${isCurrentUser ? 'flex flex-col items-end' : ''}`}>
-                          <div className={`flex items-center gap-1 mb-1 ${
-                            isCurrentUser ? 'flex-row-reverse' : 'flex-row'
-                          }`}>
-                            <span className={`text-xs font-semibold ${
-                              isAI
-                                ? 'text-purple-600'
-                                : isCurrentUser 
-                                ? 'text-green-600'
-                                : 'text-blue-600'
-                            }`}>
-                              {isCurrentUser ? 'You' : displayName}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {new Date(message.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                            </span>
-                          </div>
-                          <div className={`rounded-lg p-2 shadow-sm border text-sm ${
-                            isAI
-                              ? 'bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200/50 text-gray-800'
-                              : isCurrentUser
-                              ? 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200/50 text-gray-800'
-                              : 'bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200/50 text-gray-800'
-                          }`}>
-                          {message.sender === 'AI Assistant' || message.userName === 'AI Assistant' ? (
-                            <ReactMarkdown
-                              components={{
-                                code({ node, inline, className, children, ...props }: any) {
-                                  const match = /language-(\w+)/.exec(className || '');
-                                  return !inline && match ? (
-                                    <div className="my-2">
-                                      <div className="bg-gray-800 text-gray-300 px-2 py-1 text-xs font-semibold uppercase tracking-wide rounded-t">
-                                        {match[1]}
-                                      </div>
-                                      <SyntaxHighlighter
-                                        style={tomorrow}
-                                        language={match[1]}
-                                        PreTag="div"
-                                        className="rounded-b shadow-inner !mt-0 text-xs"
-                                        customStyle={{
-                                          margin: 0,
-                                          borderTopLeftRadius: 0,
-                                          borderTopRightRadius: 0,
-                                          fontSize: '12px',
-                                        }}
-                                        {...props}
-                                      >
-                                        {String(children).replace(/\n$/, '')}
-                                      </SyntaxHighlighter>
-                                    </div>
-                                  ) : (
-                                    <code className="bg-gray-800 text-green-400 px-1 py-0.5 rounded text-xs font-mono" {...props}>
-                                      {children}
-                                    </code>
-                                  );
-                                },
-                                p: ({ children }) => <p className="mb-2 leading-relaxed text-sm">{children}</p>,
-                                ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2 ml-2 text-sm">{children}</ul>,
-                                ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-2 ml-2 text-sm">{children}</ol>,
-                                li: ({ children }) => <li className="mb-1 text-sm">{children}</li>,
-                                h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-purple-700">{children}</h1>,
-                                h2: ({ children }) => <h2 className="text-base font-semibold mb-1 text-purple-600">{children}</h2>,
-                                h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 text-purple-600">{children}</h3>,
-                                strong: ({ children }) => <strong className="font-semibold text-purple-700">{children}</strong>,
-                                em: ({ children }) => <em className="italic text-gray-700">{children}</em>,
-                                blockquote: ({ children }) => (
-                                  <blockquote className="border-l-4 border-purple-300 pl-2 py-1 my-2 bg-purple-50/50 rounded-r text-sm">
-                                    {children}
-                                  </blockquote>
-                                ),
-                              }}
-                            >
-                              {message.content}
-                            </ReactMarkdown>
-                          ) : (
-                            <p className="leading-relaxed text-sm">{message.content}</p>
-                          )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  
-                  {/* Typing Indicators */}
-                  {isAITyping && (
-                    <div className="flex items-start gap-2">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium shadow-lg bg-gradient-to-br from-purple-500 to-indigo-600">
-                        🤖
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="text-xs font-semibold text-purple-600">
-                            AI Assistant
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            now
-                          </span>
-                        </div>
-                        <div className="rounded-lg p-2 shadow-sm border bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200/50 text-gray-800">
-                          <div className="flex items-center gap-2 text-purple-600">
-                            <span className="text-xs font-medium">AI Assistant is thinking</span>
-                            <div className="flex gap-1">
-                              <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                              <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                              <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {typingUsers.map((userName) => (
-                    <div key={userName} className="flex items-start gap-2">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium shadow-lg bg-gradient-to-br from-blue-500 to-cyan-500">
-                        {userName.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1 mb-1">
-                          <span className="text-xs font-semibold text-blue-600">
-                            {userName}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            now
-                          </span>
-                        </div>
-                        <div className="rounded-lg p-2 shadow-sm border bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200/50 text-gray-800">
-                          <div className="flex items-center gap-2 text-blue-600">
-                            <span className="text-xs font-medium">{userName} is typing</span>
-                            <div className="flex gap-1">
-                              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-3 border-t border-white/20">
-                  <form onSubmit={handleSend} className="flex gap-2">
-                    <div className="flex-1 relative">
-                      <input
-                        type="text"
-                        className="w-full bg-white/80 backdrop-blur-sm border border-blue-200/50 rounded-xl px-3 py-2 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-transparent shadow-sm transition-all duration-200 text-sm"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        placeholder="Type your message..."
-                        required
-                      />
-                    </div>
-                    <button 
-                      type="submit" 
-                      className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-3 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-1 font-medium text-sm"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                      </svg>
-                      <span className="hidden sm:inline">Send</span>
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Sidebar - Participants (only in chat mode) */}
+          {interfaceMode === 'chat' && (
+            <div className="lg:col-span-1 space-y-4 lg:space-y-6">
+              <ParticipantsList
+                roomId={id!}
+                socket={socketRef.current}
+                user={user}
+                participants={participants}
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex justify-center mt-8">
