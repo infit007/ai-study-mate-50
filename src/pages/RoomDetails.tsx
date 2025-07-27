@@ -78,7 +78,7 @@ const RoomDetails = () => {
     // Initialize socket and join room
     const socket = io(SOCKET_URL, { transports: ["websocket"] });
     (socket as any).userName = user?.name || 'Anonymous';
-    socket.emit("joinRoom", { roomId: id, userName: user?.name || 'Anonymous' });
+    socket.emit("joinRoom", id);
     socket.on("chatMessage", (msg: any) => {
       setMessages((prev) => [...prev, msg]);
       // Hide AI typing indicator when AI responds
