@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Palette, Eraser, RotateCcw, Download, Upload, Users, Undo, Redo } from 'lucide-react';
+import { Palette, Eraser, RotateCcw, Download, Upload, Users, Undo, Redo, Lock, Unlock } from 'lucide-react';
 
 interface Point {
   x: number;
@@ -15,6 +15,21 @@ interface DrawingAction {
   brushSize: number;
   userId: string;
   userName: string;
+}
+
+interface UploadedImage {
+  id: string;
+  src: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  originalWidth: number;
+  originalHeight: number;
+  isLocked: boolean;
+  isSelected: boolean;
+  isResizing: boolean;
+  isMoving: boolean;
 }
 
 interface CollaborativeWhiteboardProps {
@@ -44,6 +59,13 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
   const [historyIndex, setHistoryIndex] = useState(-1);
   const maxHistorySize = 50;
   const [customSize, setCustomSize] = useState('');
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [isImageMode, setIsImageMode] = useState(false);
+  const [dragStart, setDragStart] = useState<Point | null>(null);
+  const [resizeHandle, setResizeHandle] = useState<string | null>(null);
+  const [isRenderingImages, setIsRenderingImages] = useState(false);
+  const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const colors = [
     '#ef4444', // red
@@ -103,7 +125,17 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     setDrawingHistory([initialImageData]);
     setHistoryIndex(0);
 
-    return () => window.removeEventListener('resize', resizeCanvas);
+    // Render background images if any exist
+    if (uploadedImages.length > 0) {
+      renderBackgroundImages();
+    }
+
+    return () => {
+      window.removeEventListener('resize', resizeCanvas);
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Keyboard shortcuts for undo/redo
@@ -191,6 +223,9 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Save the current canvas state
+    ctx.save();
+    
     ctx.beginPath();
     ctx.moveTo(points[0].x, points[0].y);
 
@@ -203,19 +238,121 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.stroke();
+    
+    // Restore the canvas state
+    ctx.restore();
   }, []);
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDrawing(true);
     const point = getCanvasCoordinates(e);
-    setCurrentPath([point]);
-    currentPathRef.current = [point];
+    
+    // Check if clicking on an image
+    const clickedImage = uploadedImages.find(img => isPointInImage(point, img));
+    
+    if (clickedImage && !clickedImage.isLocked) {
+      // Handle image selection and interaction
+      setSelectedImageId(clickedImage.id);
+      setIsImageMode(true);
+      
+      // Check if clicking on resize handle
+      const handle = getResizeHandle(point, clickedImage);
+      if (handle) {
+        setResizeHandle(handle);
+        setDragStart(point);
+        return;
+      }
+      
+      // Start moving image
+      setDragStart(point);
+      setUploadedImages(prev => prev.map(img => 
+        img.id === clickedImage.id ? { ...img, isMoving: true } : img
+      ));
+      return;
+    }
+    
+    // If not clicking on image or image is locked, start drawing
+    if (!isImageMode || !clickedImage) {
+      // Deselect any selected image when clicking outside
+      if (selectedImageId) {
+        setSelectedImageId(null);
+        setUploadedImages(prev => prev.map(img => ({ ...img, isSelected: false })));
+      }
+      
+      setIsDrawing(true);
+      setCurrentPath([point]);
+      currentPathRef.current = [point];
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const point = getCanvasCoordinates(e);
+    
+    // Handle image resizing
+    if (resizeHandle && dragStart && selectedImageId) {
+      const image = uploadedImages.find(img => img.id === selectedImageId);
+      if (image) {
+        const deltaX = point.x - dragStart.x;
+        const deltaY = point.y - dragStart.y;
+        
+        let newWidth = image.width;
+        let newHeight = image.height;
+        let newX = image.x;
+        let newY = image.y;
+        
+        const aspectRatio = image.originalWidth / image.originalHeight;
+        
+        switch (resizeHandle) {
+          case 'se':
+            newWidth = Math.max(50, image.width + deltaX);
+            newHeight = newWidth / aspectRatio;
+            break;
+          case 'sw':
+            newWidth = Math.max(50, image.width - deltaX);
+            newHeight = newWidth / aspectRatio;
+            newX = image.x + image.width - newWidth;
+            break;
+          case 'ne':
+            newWidth = Math.max(50, image.width + deltaX);
+            newHeight = newWidth / aspectRatio;
+            newY = image.y + image.height - newHeight;
+            break;
+          case 'nw':
+            newWidth = Math.max(50, image.width - deltaX);
+            newHeight = newWidth / aspectRatio;
+            newX = image.x + image.width - newWidth;
+            newY = image.y + image.height - newHeight;
+            break;
+        }
+        
+        setUploadedImages(prev => prev.map(img => 
+          img.id === selectedImageId ? { ...img, x: newX, y: newY, width: newWidth, height: newHeight } : img
+        ));
+      }
+      return;
+    }
+    
+    // Handle image moving
+    if (dragStart && selectedImageId) {
+      const image = uploadedImages.find(img => img.id === selectedImageId);
+      if (image && image.isMoving) {
+        const deltaX = point.x - dragStart.x;
+        const deltaY = point.y - dragStart.y;
+        
+        // Update image position without triggering re-render immediately
+        setUploadedImages(prev => prev.map(img => 
+          img.id === selectedImageId ? { ...img, x: img.x + deltaX, y: img.y + deltaY } : img
+        ));
+        setDragStart(point);
+        
+        // Prevent drawing during image movement
+        return;
+      }
+      return;
+    }
+    
+    // Handle drawing
     if (!isDrawing) return;
 
-    const point = getCanvasCoordinates(e);
     const newPath = [...currentPathRef.current, point];
     setCurrentPath(newPath);
     currentPathRef.current = newPath;
@@ -242,6 +379,19 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
   };
 
   const handleMouseUp = () => {
+    // Handle image interaction end
+    if (resizeHandle || (dragStart && selectedImageId)) {
+      setResizeHandle(null);
+      setDragStart(null);
+      setUploadedImages(prev => prev.map(img => ({ ...img, isMoving: false })));
+      
+      // Force re-render images after movement/resize
+      setTimeout(() => {
+        renderImages();
+      }, 10);
+      return;
+    }
+    
     if (!isDrawing || currentPathRef.current.length === 0) return;
 
     setIsDrawing(false);
@@ -305,18 +455,54 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        // Calculate image dimensions to fit canvas
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const imgAspectRatio = img.width / img.height;
+        const canvasAspectRatio = canvasWidth / canvasHeight;
 
-        // Clear canvas and draw image
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        let width, height;
+        if (imgAspectRatio > canvasAspectRatio) {
+          width = canvasWidth * 0.8; // 80% of canvas width
+          height = width / imgAspectRatio;
+        } else {
+          height = canvasHeight * 0.8; // 80% of canvas height
+          width = height * imgAspectRatio;
+        }
+
+        // Center the image
+        const x = (canvasWidth - width) / 2;
+        const y = (canvasHeight - height) / 2;
+
+        const newImage: UploadedImage = {
+          id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          src: event.target?.result as string,
+          x,
+          y,
+          width,
+          height,
+          originalWidth: img.width,
+          originalHeight: img.height,
+          isLocked: false,
+          isSelected: true,
+          isResizing: false,
+          isMoving: false
+        };
+
+        setUploadedImages(prev => [...prev, newImage]);
+        setSelectedImageId(newImage.id);
+        setIsImageMode(true);
 
         // Send the uploaded image to other users
         if (socket) {
           socket.emit('whiteboardImageUpload', {
             roomId,
             imageData: event.target?.result as string,
+            imageId: newImage.id,
+            x: newImage.x,
+            y: newImage.y,
+            width: newImage.width,
+            height: newImage.height,
             userId: user?.id,
             userName: user?.name || 'Anonymous'
           });
@@ -335,6 +521,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Save the current canvas state including drawings
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     
     setDrawingHistory(prev => {
@@ -357,6 +544,16 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       if (!ctx) return;
 
       const newIndex = historyIndex - 1;
+      
+      // Clear canvas and restore background images
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Render background images
+      renderBackgroundImages();
+      
+      // Restore drawing state
       ctx.putImageData(drawingHistory[newIndex], 0, 0);
       setHistoryIndex(newIndex);
 
@@ -381,6 +578,16 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       if (!ctx) return;
 
       const newIndex = historyIndex + 1;
+      
+      // Clear canvas and restore background images
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Render background images
+      renderBackgroundImages();
+      
+      // Restore drawing state
       ctx.putImageData(drawingHistory[newIndex], 0, 0);
       setHistoryIndex(newIndex);
 
@@ -405,6 +612,212 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     }
   };
 
+  // Image management functions
+
+  const isPointInImage = (point: Point, image: UploadedImage): boolean => {
+    return point.x >= image.x && point.x <= image.x + image.width &&
+           point.y >= image.y && point.y <= image.y + image.height;
+  };
+
+  const getResizeHandle = (point: Point, image: UploadedImage): string | null => {
+    const handleSize = 8;
+    const handles = {
+      'nw': { x: image.x, y: image.y },
+      'ne': { x: image.x + image.width - handleSize, y: image.y },
+      'sw': { x: image.x, y: image.y + image.height - handleSize },
+      'se': { x: image.x + image.width - handleSize, y: image.y + image.height - handleSize }
+    };
+
+    for (const [handle, pos] of Object.entries(handles)) {
+      if (point.x >= pos.x && point.x <= pos.x + handleSize &&
+          point.y >= pos.y && point.y <= pos.y + handleSize) {
+        return handle;
+      }
+    }
+    return null;
+  };
+
+  const lockImage = (imageId: string) => {
+    setUploadedImages(prev => prev.map(img => 
+      img.id === imageId ? { ...img, isLocked: true, isSelected: false } : img
+    ));
+    setSelectedImageId(null);
+    setIsImageMode(false);
+    
+    // Send lock action to other users
+    if (socket) {
+      socket.emit('whiteboardImageLock', {
+        roomId,
+        imageId,
+        userId: user?.id,
+        userName: user?.name || 'Anonymous'
+      });
+    }
+  };
+
+  const unlockImage = (imageId: string) => {
+    setUploadedImages(prev => prev.map(img => 
+      img.id === imageId ? { ...img, isLocked: false } : img
+    ));
+    setIsImageMode(true);
+    
+    // Send unlock action to other users
+    if (socket) {
+      socket.emit('whiteboardImageUnlock', {
+        roomId,
+        imageId,
+        userId: user?.id,
+        userName: user?.name || 'Anonymous'
+      });
+    }
+  };
+
+  // Render background images (called only when needed)
+  const renderBackgroundImages = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Only render if there are images and we're not currently drawing
+    if (uploadedImages.length === 0) return;
+
+    // Save current canvas state
+    ctx.save();
+    
+    // Clear and fill background
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Render all images
+    uploadedImages.forEach(image => {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, image.x, image.y, image.width, image.height);
+        
+        // Draw selection border and resize handles if selected
+        if (image.isSelected && !image.isLocked) {
+          ctx.strokeStyle = '#3b82f6';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.strokeRect(image.x, image.y, image.width, image.height);
+          ctx.setLineDash([]);
+          
+          // Draw resize handles
+          const handleSize = 8;
+          ctx.fillStyle = '#3b82f6';
+          ctx.fillRect(image.x, image.y, handleSize, handleSize);
+          ctx.fillRect(image.x + image.width - handleSize, image.y, handleSize, handleSize);
+          ctx.fillRect(image.x, image.y + image.height - handleSize, handleSize, handleSize);
+          ctx.fillRect(image.x + image.width - handleSize, image.y + image.height - handleSize, handleSize, handleSize);
+        }
+        
+        // Draw lock indicator if image is locked
+        if (image.isLocked) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(image.x + 5, image.y + 5, 20, 20);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '12px Arial';
+          ctx.fillText('🔒', image.x + 8, image.y + 18);
+        }
+      };
+      img.src = image.src;
+    });
+    
+    // Restore canvas state
+    ctx.restore();
+  }, [uploadedImages]);
+
+  // Render images on canvas (for image operations)
+  const renderImages = useCallback(() => {
+    if (isRenderingImages) return; // Prevent recursive rendering
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    setIsRenderingImages(true);
+
+    // Clear the canvas first
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Fill with white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Render all images
+    let imagesLoaded = 0;
+    const totalImages = uploadedImages.length;
+    
+    if (totalImages === 0) {
+      setIsRenderingImages(false);
+      return;
+    }
+
+    uploadedImages.forEach(image => {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, image.x, image.y, image.width, image.height);
+        
+        // Draw selection border and resize handles if selected
+        if (image.isSelected && !image.isLocked) {
+          ctx.strokeStyle = '#3b82f6';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.strokeRect(image.x, image.y, image.width, image.height);
+          ctx.setLineDash([]);
+          
+          // Draw resize handles
+          const handleSize = 8;
+          ctx.fillStyle = '#3b82f6';
+          ctx.fillRect(image.x, image.y, handleSize, handleSize);
+          ctx.fillRect(image.x + image.width - handleSize, image.y, handleSize, handleSize);
+          ctx.fillRect(image.x, image.y + image.height - handleSize, handleSize, handleSize);
+          ctx.fillRect(image.x + image.width - handleSize, image.y + image.height - handleSize, handleSize, handleSize);
+        }
+        
+        // Draw lock indicator if image is locked
+        if (image.isLocked) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(image.x + 5, image.y + 5, 20, 20);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '12px Arial';
+          ctx.fillText('🔒', image.x + 8, image.y + 18);
+        }
+        
+        imagesLoaded++;
+        if (imagesLoaded === totalImages) {
+          setIsRenderingImages(false);
+        }
+      };
+      img.onerror = () => {
+        imagesLoaded++;
+        if (imagesLoaded === totalImages) {
+          setIsRenderingImages(false);
+        }
+      };
+      img.src = image.src;
+    });
+  }, [uploadedImages, isRenderingImages]);
+
+  // Initial render of images
+  useEffect(() => {
+    if (uploadedImages.length > 0) {
+      renderBackgroundImages();
+    }
+  }, []); // Only run once on mount
+
+  // Re-render images only when images are added/removed or when image operations complete
+  useEffect(() => {
+    if (uploadedImages.length > 0) {
+      renderBackgroundImages();
+    }
+  }, [uploadedImages.length]); // Only re-render when number of images changes
+
   return (
     <Card className="bg-white min-h-[480px] flex flex-col">
       {/* Header with toggle functionality */}
@@ -420,7 +833,12 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Removed open/close button */}
+          {isImageMode && (
+            <div className="flex items-center gap-1 text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded">
+              <span>📷</span>
+              <span>Image Mode</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -558,6 +976,30 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
                 <span className="hidden sm:inline">Load</span>
               </Button>
             </div>
+
+                    {/* Lock/Unlock Image */}
+            {selectedImageId && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => lockImage(selectedImageId)}
+                  className="flex items-center gap-2"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span className="hidden sm:inline">Lock</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => unlockImage(selectedImageId)}
+                  className="flex items-center gap-2"
+                >
+                  <Unlock className="w-4 h-4" />
+                  <span className="hidden sm:inline">Unlock</span>
+                </Button>
+              </>
+            )}
       </div>
 
       {/* Canvas */}
