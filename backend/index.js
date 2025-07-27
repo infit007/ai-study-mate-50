@@ -119,33 +119,16 @@ const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
 
 // Middleware
 app.use(cors({ 
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'http://localhost:8080',
-      'http://localhost:5173',
-      'http://localhost:3000',
-      'https://ai-study-mate-50.vercel.app',
-      'https://ai-study-mate-50-y3wf.vercel.app'
-    ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log('CORS blocked origin:', origin);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  origin: [
+    'http://localhost:8080',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://ai-study-mate-50.vercel.app',
+    'https://ai-study-mate-50-y3wf.vercel.app'
+  ], 
+  credentials: true 
 }));
 app.use(express.json());
-
-// Handle preflight requests
-app.options('*', cors());
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -154,8 +137,7 @@ app.get('/api/health', async (req, res) => {
     res.json({ 
       status: 'healthy', 
       database: 'connected',
-      timestamp: new Date().toISOString(),
-      cors: 'enabled'
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     console.error('Health check failed:', error);
@@ -166,15 +148,6 @@ app.get('/api/health', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   }
-});
-
-// Test CORS endpoint
-app.get('/api/test-cors', (req, res) => {
-  res.json({ 
-    message: 'CORS is working!',
-    origin: req.headers.origin,
-    timestamp: new Date().toISOString()
-  });
 });
 
 // Database initialization endpoint
@@ -234,12 +207,6 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  console.log('Login request received:', { 
-    origin: req.headers.origin,
-    method: req.method,
-    body: { email: req.body.email ? '***' : 'missing' }
-  });
-  
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
   try {
@@ -248,7 +215,6 @@ app.post('/api/auth/login', async (req, res) => {
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials.' });
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-    console.log('Login successful for:', email);
     res.json({ user, token });
   } catch (err) {
     console.error('Login error:', err);
@@ -307,37 +273,6 @@ app.get('/api/rooms', async (req, res) => {
     res.json({ rooms });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch rooms.' });
-  }
-});
-
-app.get('/api/rooms/:id', authMiddleware, async (req, res) => {
-  try {
-    const roomId = req.params.id;
-    const room = await prisma.studyRoom.findUnique({
-      where: { id: roomId },
-      include: { 
-        participants: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true
-              }
-            }
-          }
-        }
-      },
-    });
-    
-    if (!room) {
-      return res.status(404).json({ error: 'Room not found.' });
-    }
-    
-    res.json(room);
-  } catch (err) {
-    console.error('Error fetching room:', err);
-    res.status(500).json({ error: 'Failed to fetch room.' });
   }
 });
 
@@ -467,7 +402,7 @@ app.delete('/api/rooms/:id', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/rooms/:id/messages', authMiddleware, async (req, res) => {
+app.get('/api/rooms/:id/messages', async (req, res) => {
   const roomId = req.params.id;
   try {
     const messages = await prisma.message.findMany({
@@ -475,13 +410,15 @@ app.get('/api/rooms/:id/messages', authMiddleware, async (req, res) => {
       orderBy: { createdAt: 'asc' },
       include: { user: true },
     });
-    res.json(messages.map(msg => ({
-      id: msg.id,
-      userId: msg.userId,
-      userName: msg.user?.name || "Unknown",
-      content: msg.content,
-      createdAt: msg.createdAt,
-    })));
+    res.json({
+      messages: messages.map(msg => ({
+        id: msg.id,
+        userId: msg.userId,
+        userName: msg.user?.name || "Unknown",
+        content: msg.content,
+        createdAt: msg.createdAt,
+      })),
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch messages.' });
   }
@@ -661,14 +598,6 @@ io.on('connection', (socket) => {
 
 // ------------------------ Start Server ------------------------
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 Socket.IO server ready`);
-  console.log(`🌐 CORS enabled for: ${['http://localhost:8080', 'http://localhost:5173', 'http://localhost:3000', 'https://ai-study-mate-50.vercel.app', 'https://ai-study-mate-50-y3wf.vercel.app'].join(', ')}`);
+  console.log(`Server running on port ${PORT}`);
 });
