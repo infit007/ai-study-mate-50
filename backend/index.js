@@ -518,6 +518,42 @@ io.on('connection', (socket) => {
       });
     }
   });
+
+  // Whiteboard events
+  socket.on('joinWhiteboard', ({ roomId, userName }) => {
+    socket.join(`whiteboard-${roomId}`);
+    socket.to(`whiteboard-${roomId}`).emit('userJoinedWhiteboard', userName);
+    console.log(`${userName} joined whiteboard in room ${roomId}`);
+  });
+
+  socket.on('leaveWhiteboard', ({ roomId, userName }) => {
+    socket.leave(`whiteboard-${roomId}`);
+    socket.to(`whiteboard-${roomId}`).emit('userLeftWhiteboard', userName);
+    console.log(`${userName} left whiteboard in room ${roomId}`);
+  });
+
+  socket.on('whiteboardDraw', ({ roomId, points, color, brushSize, type, userId, userName }) => {
+    // Broadcast drawing action to all users in the whiteboard room
+    socket.to(`whiteboard-${roomId}`).emit('whiteboardDraw', {
+      points,
+      color,
+      brushSize,
+      type,
+      userId,
+      userName
+    });
+    console.log(`Drawing action from ${userName} in room ${roomId}`);
+  });
+
+  socket.on('whiteboardClear', ({ roomId }) => {
+    // Broadcast clear action to all users in the whiteboard room
+    socket.to(`whiteboard-${roomId}`).emit('whiteboardClear');
+    console.log(`Whiteboard cleared in room ${roomId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected');
+  });
 });
 
 // ------------------------ Start Server ------------------------
