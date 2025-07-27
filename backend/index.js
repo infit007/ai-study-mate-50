@@ -610,99 +610,13 @@ io.on('connection', (socket) => {
     console.log(`Whiteboard cleared in room ${roomId}`);
   });
 
-  socket.on('whiteboardUndo', ({ roomId, userId, userName }) => {
-    // Broadcast undo action to all users in the whiteboard room
-    socket.to(`whiteboard-${roomId}`).emit('whiteboardUndo', {
-      userId,
-      userName
-    });
-    console.log(`Undo action by ${userName} in room ${roomId}`);
-  });
-
-  socket.on('whiteboardRedo', ({ roomId, userId, userName }) => {
-    // Broadcast redo action to all users in the whiteboard room
-    socket.to(`whiteboard-${roomId}`).emit('whiteboardRedo', {
-      userId,
-      userName
-    });
-    console.log(`Redo action by ${userName} in room ${roomId}`);
-  });
-
-  socket.on('whiteboardImageUpload', ({ roomId, imageData, imageId, x, y, width, height, userId, userName }) => {
+  socket.on('whiteboardImageUpload', ({ roomId, imageData, userId, userName }) => {
     // Broadcast image upload to all users in the whiteboard room
     socket.to(`whiteboard-${roomId}`).emit('whiteboardImageUpload', {
       imageData,
-      imageId,
-      x,
-      y,
-      width,
-      height,
       userName
     });
     console.log(`Image uploaded by ${userName} in room ${roomId}`);
-  });
-
-  socket.on('whiteboardImageMove', ({ roomId, imageId, x, y, userId, userName }) => {
-    // Broadcast image move to all users in the whiteboard room
-    socket.to(`whiteboard-${roomId}`).emit('whiteboardImageMove', {
-      imageId,
-      x,
-      y,
-      userName
-    });
-    console.log(`Image moved by ${userName} in room ${roomId}`);
-  });
-
-  socket.on('whiteboardImageResize', ({ roomId, imageId, x, y, width, height, userId, userName }) => {
-    // Broadcast image resize to all users in the whiteboard room
-    socket.to(`whiteboard-${roomId}`).emit('whiteboardImageResize', {
-      imageId,
-      x,
-      y,
-      width,
-      height,
-      userName
-    });
-    console.log(`Image resized by ${userName} in room ${roomId}`);
-  });
-
-  socket.on('whiteboardImageLock', ({ roomId, imageId, userId, userName }) => {
-    // Broadcast image lock to all users in the whiteboard room
-    socket.to(`whiteboard-${roomId}`).emit('whiteboardImageLock', {
-      imageId,
-      userName
-    });
-    console.log(`Image locked by ${userName} in room ${roomId}`);
-  });
-
-  socket.on('whiteboardImageUnlock', ({ roomId, imageId, userId, userName }) => {
-    // Broadcast image unlock to all users in the whiteboard room
-    socket.to(`whiteboard-${roomId}`).emit('whiteboardImageUnlock', {
-      imageId,
-      userName
-    });
-    console.log(`Image unlocked by ${userName} in room ${roomId}`);
-  });
-
-  socket.on('requestExistingImages', ({ roomId }) => {
-    // Broadcast request for existing images to all users in the whiteboard room
-    socket.to(`whiteboard-${roomId}`).emit('requestExistingImages');
-    console.log(`Request for existing images in room ${roomId}`);
-  });
-
-  socket.on('requestWhiteboardState', ({ roomId }) => {
-    // Broadcast request for complete whiteboard state to all users in the whiteboard room
-    socket.to(`whiteboard-${roomId}`).emit('requestWhiteboardState');
-    console.log(`Request for whiteboard state in room ${roomId}`);
-  });
-
-  socket.on('whiteboardStateSync', ({ roomId, state, userId, userName }) => {
-    // Broadcast complete whiteboard state to all users in the whiteboard room
-    socket.to(`whiteboard-${roomId}`).emit('whiteboardStateSync', {
-      state,
-      userName
-    });
-    console.log(`Whiteboard state synced by ${userName} in room ${roomId}`);
   });
 
   socket.on('getOnlineUsers', (roomId) => {
