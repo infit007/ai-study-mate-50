@@ -78,7 +78,7 @@ const RoomDetails = () => {
     // Initialize socket and join room
     const socket = io(SOCKET_URL, { transports: ["websocket"] });
     (socket as any).userName = user?.name || 'Anonymous';
-    socket.emit("joinRoom", id);
+    socket.emit("joinRoom", { roomId: id, userName: user?.name || 'Anonymous' });
     socket.on("chatMessage", (msg: any) => {
       setMessages((prev) => [...prev, msg]);
       // Hide AI typing indicator when AI responds
@@ -173,7 +173,7 @@ const RoomDetails = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full max-w-none mx-auto">
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-white/20">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">{room?.name}</h1>
           <p className="text-gray-600 mb-4">{room?.description}</p>
@@ -505,21 +505,6 @@ const RoomDetails = () => {
               </div>
             )}
             
-            <SyncedPomodoroTimer
-              roomId={id!}
-              socket={socketRef.current}
-              user={user}
-              onSessionComplete={() => {
-                // Optional: Send notification to chat when session completes
-                if (socketRef.current) {
-                  socketRef.current.emit("chatMessage", {
-                    roomId: id,
-                    userId: 'system',
-                    content: "🎉 Focus session completed! Time for a break.",
-                  });
-                }
-              }}
-            />
           </div>
 
           {/* Sidebar - Participants (only in chat mode) */}
@@ -533,6 +518,25 @@ const RoomDetails = () => {
               />
             </div>
           )}
+        </div>
+
+        {/* Pomodoro Timer - Above Navigation */}
+        <div className="mb-6">
+          <SyncedPomodoroTimer
+            roomId={id!}
+            socket={socketRef.current}
+            user={user}
+            onSessionComplete={() => {
+              // Optional: Send notification to chat when session completes
+              if (socketRef.current) {
+                socketRef.current.emit("chatMessage", {
+                  roomId: id,
+                  userId: 'system',
+                  content: "🎉 Focus session completed! Time for a break.",
+                });
+              }
+            }}
+          />
         </div>
 
         <div className="flex justify-center mt-8">

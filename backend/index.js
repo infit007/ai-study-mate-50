@@ -468,9 +468,10 @@ async function getAIResponseWithContext(prompt, roomId) {
 }
 
 io.on('connection', (socket) => {
-  socket.on('joinRoom', (roomId) => {
+  socket.on('joinRoom', ({ roomId, userName }) => {
     socket.join(roomId);
     socket.roomId = roomId;
+    socket.userName = userName; // Store the user name on the socket
     
     // Get current users in the room and send to the new user
     const room = io.sockets.adapter.rooms.get(roomId);
@@ -478,13 +479,13 @@ io.on('connection', (socket) => {
       const users = Array.from(room).map(socketId => {
         const userSocket = io.sockets.sockets.get(socketId);
         return userSocket?.userName || 'Anonymous';
-      }).filter(userName => userName !== (socket.userName || 'Anonymous'));
+      }).filter(name => name !== userName); // Don't include self
       
       socket.emit('currentUsers', users);
     }
     
     // Notify other users in the room
-    socket.to(roomId).emit('userJoined', socket.userName || 'Anonymous');
+    socket.to(roomId).emit('userJoined', userName);
   });
 
   // Timer synchronization events
@@ -622,10 +623,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected');
+    console.log('User disconnected:', socket.userName);
     // Notify other users when someone leaves
-    if (socket.roomId) {
-      socket.to(socket.roomId).emit('userLeft', socket.userName || 'Anonymous');
+    if (socket.roomId && socket.userName) {
+      socket.to(socket.roomId).emit('userLeft', socket.userName);
     }
   });
 });

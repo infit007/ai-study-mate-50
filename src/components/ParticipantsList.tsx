@@ -32,22 +32,31 @@ const ParticipantsList: React.FC<ParticipantsListProps> = ({
     // Listen for user join/leave events
     socket.on('userJoined', (userName: string) => {
       console.log('User joined participants:', userName);
-      setOnlineUsers(prev => {
-        if (!prev.includes(userName)) {
-          return [...prev, userName];
-        }
-        return prev;
-      });
+      if (userName && userName !== 'Anonymous') {
+        setOnlineUsers(prev => {
+          if (!prev.includes(userName)) {
+            return [...prev, userName];
+          }
+          return prev;
+        });
+      }
     });
 
     socket.on('userLeft', (userName: string) => {
       console.log('User left participants:', userName);
-      setOnlineUsers(prev => prev.filter(name => name !== userName));
+      if (userName && userName !== 'Anonymous') {
+        setOnlineUsers(prev => prev.filter(name => name !== userName));
+      }
     });
 
     socket.on('currentUsers', (users: string[]) => {
       console.log('Current users in participants:', users);
-      setOnlineUsers(users);
+      // Filter out 'Anonymous' users and add current user
+      const filteredUsers = users.filter(name => name && name !== 'Anonymous');
+      if (user?.name && !filteredUsers.includes(user.name)) {
+        filteredUsers.push(user.name);
+      }
+      setOnlineUsers(filteredUsers);
     });
 
     // Add current user to online users if not already there
@@ -92,7 +101,7 @@ const ParticipantsList: React.FC<ParticipantsListProps> = ({
     <Card className="p-4 bg-white">
       <div className="flex items-center gap-2 mb-4">
         <Users className="w-4 h-4" />
-        <h4 className="font-semibold">Participants ({participants.length})</h4>
+        <h4 className="font-semibold">Participants ({onlineUsers.length + (user?.name ? 1 : 0)})</h4>
       </div>
       
       <div className="space-y-3">
