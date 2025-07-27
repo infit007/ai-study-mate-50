@@ -294,7 +294,21 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
           </h4>
           <div className="flex items-center gap-1 text-sm text-gray-600">
             <Users className="w-4 h-4" />
-            <span>{activeUsers.length + 1} active</span>
+            <span className="hidden sm:inline">
+              {activeUsers.length + 1} active
+            </span>
+            <div className="flex items-center gap-1">
+              {activeUsers.slice(0, 3).map((userName, index) => (
+                <span key={index} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                  {userName}
+                </span>
+              ))}
+              {activeUsers.length > 3 && (
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                  +{activeUsers.length - 3} more
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
