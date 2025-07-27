@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Avatar } from '@/components/ui/avatar';
-import { Users, Circle } from 'lucide-react';
+import { Users, Circle, Mic } from 'lucide-react';
 
 interface Participant {
   id: string;
@@ -16,13 +16,15 @@ interface ParticipantsListProps {
   socket: any;
   user: any;
   participants: Participant[];
+  activeSpeakers?: string[];
 }
 
 const ParticipantsList: React.FC<ParticipantsListProps> = ({
   roomId,
   socket,
   user,
-  participants
+  participants,
+  activeSpeakers = []
 }) => {
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
@@ -106,6 +108,12 @@ const ParticipantsList: React.FC<ParticipantsListProps> = ({
                 </div>
               </Avatar>
               <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white bg-green-500"></div>
+              {/* Speaking indicator */}
+              {activeSpeakers.includes(user.id) && (
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
+                  <Mic className="w-2 h-2 text-white" />
+                </div>
+              )}
             </div>
             
             <div className="flex-1 min-w-0">
@@ -117,6 +125,9 @@ const ParticipantsList: React.FC<ParticipantsListProps> = ({
                 <div className="flex items-center gap-1 text-xs text-green-600">
                   <Circle className="w-2 h-2 fill-current" />
                   <span>Online</span>
+                  {activeSpeakers.includes(user.id) && (
+                    <span className="text-red-500 font-medium">• Speaking</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -126,36 +137,52 @@ const ParticipantsList: React.FC<ParticipantsListProps> = ({
         {/* Show other online users */}
         {onlineUsers
           .filter(userName => userName !== user?.name)
-          .map((userName, index) => (
-            <div key={index} className="flex items-center gap-3">
-              <div className="relative">
-                <Avatar className="w-8 h-8">
-                  <div className="w-full h-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold">
-                    {userName.split(' ').map(n => n[0]).join('')}
-                  </div>
-                </Avatar>
-                <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white bg-green-500"></div>
-              </div>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <div className="text-sm font-medium truncate">
-                    {userName}
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-green-600">
-                    <Circle className="w-2 h-2 fill-current" />
-                    <span>Online</span>
+          .map((userName, index) => {
+            // Find participant by name to get their ID
+            const participant = participants.find(p => p.name === userName);
+            const isSpeaking = participant && activeSpeakers.includes(participant.id);
+            
+            return (
+              <div key={index} className="flex items-center gap-3">
+                <div className="relative">
+                  <Avatar className="w-8 h-8">
+                    <div className="w-full h-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold">
+                      {userName.split(' ').map(n => n[0]).join('')}
+                    </div>
+                  </Avatar>
+                  <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white bg-green-500"></div>
+                  {/* Speaking indicator */}
+                  {isSpeaking && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
+                      <Mic className="w-2 h-2 text-white" />
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-medium truncate">
+                      {userName}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-green-600">
+                      <Circle className="w-2 h-2 fill-current" />
+                      <span>Online</span>
+                      {isSpeaking && (
+                        <span className="text-red-500 font-medium">• Speaking</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
         {/* Show participants from database */}
         {participants
           .filter(participant => participant.id !== user?.id && !onlineUsers.includes(participant.name))
           .map((participant) => {
             const isOnline = onlineUsers.includes(participant.name) || participant.status === 'online';
+            const isSpeaking = activeSpeakers.includes(participant.id);
             
             return (
               <div key={participant.id} className="flex items-center gap-3">
@@ -168,6 +195,12 @@ const ParticipantsList: React.FC<ParticipantsListProps> = ({
                   <div className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
                     isOnline ? 'bg-green-500' : 'bg-gray-400'
                   }`}></div>
+                  {/* Speaking indicator */}
+                  {isSpeaking && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
+                      <Mic className="w-2 h-2 text-white" />
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex-1 min-w-0">
@@ -180,6 +213,9 @@ const ParticipantsList: React.FC<ParticipantsListProps> = ({
                     }`}>
                       <Circle className={`w-2 h-2 ${isOnline ? 'fill-current' : ''}`} />
                       <span>{getStatusText(isOnline ? 'online' : participant.status)}</span>
+                      {isSpeaking && (
+                        <span className="text-red-500 font-medium">• Speaking</span>
+                      )}
                     </div>
                   </div>
                   {participant.subject && (

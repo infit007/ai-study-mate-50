@@ -9,6 +9,7 @@ import SyncedPomodoroTimer from "@/components/SyncedPomodoroTimer";
 import ParticipantsList from "@/components/ParticipantsList";
 import InterfaceToggle from "@/components/InterfaceToggle";
 import ResizableLayout from "@/components/ResizableLayout";
+import AudioStream from "@/components/AudioStream";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
@@ -25,6 +26,7 @@ const RoomDetails = () => {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [interfaceMode, setInterfaceMode] = useState<'chat' | 'whiteboard'>('chat');
   const [participants, setParticipants] = useState<any[]>([]);
+  const [activeSpeakers, setActiveSpeakers] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const user = JSON.parse(localStorage.getItem("user") || "null");
@@ -88,15 +90,15 @@ const RoomDetails = () => {
     });
 
     // Listen for user join/leave events
-    socket.on('userJoined', (userName: string) => {
-      console.log('User joined:', userName);
+    socket.on('userJoined', (data: { userId: string; userName: string }) => {
+      console.log('User joined:', data.userName);
       // Add user to participants if not already present
       setParticipants(prev => {
-        const existing = prev.find(p => p.name === userName);
+        const existing = prev.find(p => p.id === data.userId);
         if (!existing) {
           return [...prev, {
-            id: `temp-${Date.now()}`,
-            name: userName,
+            id: data.userId,
+            name: data.userName,
             subject: room?.subject || 'General',
             status: 'online'
           }];
@@ -105,10 +107,10 @@ const RoomDetails = () => {
       });
     });
 
-    socket.on('userLeft', (userName: string) => {
-      console.log('User left:', userName);
+    socket.on('userLeft', (data: { userId: string; userName: string }) => {
+      console.log('User left:', data.userName);
       // Remove user from participants
-      setParticipants(prev => prev.filter(p => p.name !== userName));
+      setParticipants(prev => prev.filter(p => p.id !== data.userId));
     });
 
     socket.on('currentUsers', (users: string[]) => {
@@ -291,6 +293,16 @@ const RoomDetails = () => {
                             required
                           />
                         </div>
+                        
+                        {/* Audio Stream Component for Sidebar */}
+                        <AudioStream
+                          roomId={id!}
+                          socket={socketRef.current}
+                          user={user}
+                          isActive={interfaceMode === 'whiteboard'}
+                          onActiveSpeakersChange={setActiveSpeakers}
+                        />
+                        
                         <button 
                           type="submit" 
                           className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-1 font-medium text-sm"
@@ -438,6 +450,16 @@ const RoomDetails = () => {
                   required
                 />
               </div>
+              
+              {/* Audio Stream Component */}
+              <AudioStream
+                roomId={id!}
+                socket={socketRef.current}
+                user={user}
+                isActive={interfaceMode === 'chat'}
+                onActiveSpeakersChange={setActiveSpeakers}
+              />
+              
               <button 
                 type="submit" 
                 className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-4 rounded-2xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-2 font-medium"
@@ -458,6 +480,7 @@ const RoomDetails = () => {
                     socket={socketRef.current}
                     user={user}
                     participants={participants}
+                    activeSpeakers={activeSpeakers}
                   />
                 </div>
               </div>

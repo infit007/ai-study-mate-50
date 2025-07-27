@@ -481,6 +481,8 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', (roomId) => {
     socket.join(roomId);
     socket.roomId = roomId;
+    socket.userId = socket.userId || `user-${Date.now()}`;
+    socket.userName = socket.userName || 'Anonymous';
     
     // Get current users in the room and send to the new user
     const room = io.sockets.adapter.rooms.get(roomId);
@@ -493,8 +495,11 @@ io.on('connection', (socket) => {
       socket.emit('currentUsers', users);
     }
     
-    // Notify other users in the room
-    socket.to(roomId).emit('userJoined', socket.userName || 'Anonymous');
+    // Notify other users in the room with userId for WebRTC
+    socket.to(roomId).emit('userJoined', { 
+      userId: socket.userId, 
+      userName: socket.userName 
+    });
   });
 
   // Timer synchronization events
@@ -631,11 +636,61 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Audio streaming events
+  socket.on('audioStart', ({ roomId, userId, userName }) => {
+    // Notify other users that someone started speaking
+    socket.to(roomId).emit('audioStarted', { userId, userName });
+    console.log(`${userName} started speaking in room ${roomId}`);
+  });
+
+  socket.on('audioStop', ({ roomId, userId, userName }) => {
+    // Notify other users that someone stopped speaking
+    socket.to(roomId).emit('audioStopped', { userId, userName });
+    console.log(`${userName} stopped speaking in room ${roomId}`);
+  });
+
+  // WebRTC signaling events
+  socket.on('audioOffer', ({ roomId, targetUserId, offer }) => {
+    // Forward the offer to the target user
+    const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.userId === targetUserId);
+    if (targetSocket) {
+      targetSocket.emit('audioOffer', { 
+        fromUserId: socket.userId, 
+        offer 
+      });
+    }
+  });
+
+  socket.on('audioAnswer', ({ roomId, targetUserId, answer }) => {
+    // Forward the answer to the target user
+    const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.userId === targetUserId);
+    if (targetSocket) {
+      targetSocket.emit('audioAnswer', { 
+        fromUserId: socket.userId, 
+        answer 
+      });
+    }
+  });
+
+  socket.on('audioIceCandidate', ({ roomId, targetUserId, candidate }) => {
+    // Forward the ICE candidate to the target user
+    const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.userId === targetUserId);
+    if (targetSocket) {
+      targetSocket.emit('audioIceCandidate', { 
+        fromUserId: socket.userId, 
+        candidate 
+      });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected');
     // Notify other users when someone leaves
     if (socket.roomId) {
-      socket.to(socket.roomId).emit('userLeft', socket.userName || 'Anonymous');
+      socket.to(socket.roomId).emit('userLeft', { 
+        userId: socket.userId, 
+        userName: socket.userName || 'Anonymous' 
+      });
     }
   });
 });
