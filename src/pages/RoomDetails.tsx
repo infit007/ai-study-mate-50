@@ -185,7 +185,7 @@ const RoomDetails = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:gap-6 mb-6">
           {/* Main Content Area */}
-          <div className={`space-y-4 lg:space-y-6 ${interfaceMode === 'chat' ? 'lg:col-span-3' : 'lg:col-span-2'}`}>
+          <div className={`space-y-4 lg:space-y-6 ${interfaceMode === 'chat' ? 'lg:col-span-3' : 'lg:col-span-4'}`}>
             {/* Interface Toggle */}
             <InterfaceToggle
               currentMode={interfaceMode}
@@ -208,7 +208,7 @@ const RoomDetails = () => {
                   />
                 }
                 rightComponent={
-                  <div className="h-full flex flex-col">
+                  <div className="h-full flex flex-col space-y-4">
                     <ParticipantsList
                       roomId={id!}
                       socket={socketRef.current}
@@ -217,7 +217,7 @@ const RoomDetails = () => {
                     />
                     
                     {/* Chat in sidebar when whiteboard mode is active */}
-                    <div className="flex-1 mt-4 bg-gradient-to-br from-white/90 to-blue-50/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
+                    <div className="flex-1 bg-gradient-to-br from-white/90 to-blue-50/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
                       <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-3">
                         <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
