@@ -66,6 +66,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
   const [resizeHandle, setResizeHandle] = useState<string | null>(null);
   const [isRenderingImages, setIsRenderingImages] = useState(false);
   const renderTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'disconnected'>('connected');
 
   const colors = [
     '#ef4444', // red
@@ -85,7 +86,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
     // Set canvas size with high DPI support
@@ -105,7 +106,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       canvas.height = rect.height * dpr;
       
       // Scale the context to ensure correct drawing operations
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (ctx) {
         ctx.scale(dpr, dpr);
         ctx.fillStyle = '#ffffff';
@@ -158,14 +159,85 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
 
   // Socket event listeners
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      setSyncStatus('disconnected');
+      return;
+    }
+
+    setSyncStatus('connected');
+
+    socket.on('connect', () => {
+      setSyncStatus('connected');
+    }); 
+
+    socket.on('disconnect', () => {
+      setSyncStatus('disconnected');
+    });
 
     socket.on('whiteboardDraw', (action: DrawingAction) => {
+      // Don't draw if it's from the current user
+      if (action.userId === user?.id) return;
+      
       drawPath(action.points, action.color, action.brushSize, action.type === 'erase');
     });
 
     socket.on('whiteboardClear', () => {
       clearCanvas();
+      setUploadedImages([]); // Clear all images for all users
+    });
+
+    socket.on('whiteboardUndo', (data: { userId: string; userName: string }) => {
+      // Don't undo if it's from the current user
+      if (data.userId === user?.id) return;
+      
+      if (historyIndex > 0) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+
+        const newIndex = historyIndex - 1;
+        
+        // Clear canvas and restore background images
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Render background images
+        renderBackgroundImages();
+        
+        // Restore drawing state
+        ctx.putImageData(drawingHistory[newIndex], 0, 0);
+        setHistoryIndex(newIndex);
+      }
+    });
+
+    socket.on('whiteboardRedo', (data: { userId: string; userName: string }) => {
+      // Don't redo if it's from the current user
+      if (data.userId === user?.id) return;
+      
+      if (historyIndex < drawingHistory.length - 1) {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+
+        const newIndex = historyIndex + 1;
+        
+        // Clear canvas and restore background images
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Render background images
+        renderBackgroundImages();
+        
+        // Restore drawing state
+        ctx.putImageData(drawingHistory[newIndex], 0, 0);
+        setHistoryIndex(newIndex);
+      }
     });
 
     socket.on('whiteboardImageUpload', (data: { 
@@ -175,8 +247,17 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       y: number;
       width: number;
       height: number;
+      userId: string;
       userName: string 
     }) => {
+      console.log('Received image upload from:', data.userName, 'userId:', data.userId, 'current user:', user?.id);
+      
+      // Don't add if it's from the current user
+      if (data.userId === user?.id) {
+        console.log('Skipping own image upload');
+        return;
+      }
+      
       const img = new Image();
       img.onload = () => {
         const newImage: UploadedImage = {
@@ -194,7 +275,13 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
           isMoving: false
         };
 
+        console.log('Adding image to state:', newImage.id);
         setUploadedImages(prev => [...prev, newImage]);
+        
+        // Force re-render to show the new image
+        setTimeout(() => {
+          renderBackgroundImages();
+        }, 100);
       };
       img.src = data.imageData;
     });
@@ -203,11 +290,60 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       setActiveUsers(prev => [...prev, userName]);
     });
 
+    socket.on('requestWhiteboardState', (data: { userId: string; userName: string }) => {
+      // Send current state to the requesting user
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
+
+      const currentImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      socket.emit('whiteboardStateSync', {
+        roomId,
+        imageData: currentImageData,
+        uploadedImages,
+        historyIndex,
+        userId: user?.id,
+        userName: user?.name || 'Anonymous'
+      });
+    });
+
+    socket.on('whiteboardStateSync', (data: { 
+      imageData: ImageData; 
+      uploadedImages: UploadedImage[]; 
+      historyIndex: number;
+      userId: string; 
+      userName: string 
+    }) => {
+      // Don't sync if it's from the current user
+      if (data.userId === user?.id) return;
+      
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
+
+      // Restore the canvas state
+      ctx.putImageData(data.imageData, 0, 0);
+      
+      // Restore uploaded images
+      setUploadedImages(data.uploadedImages);
+      
+      // Restore history
+      setHistoryIndex(data.historyIndex);
+    });
+
     socket.on('userLeftWhiteboard', (userName: string) => {
       setActiveUsers(prev => prev.filter(name => name !== userName));
     });
 
-    socket.on('whiteboardImageLock', (data: { imageId: string; userName: string }) => {
+    socket.on('whiteboardImageLock', (data: { imageId: string; userId: string; userName: string }) => {
+      // Don't update if it's from the current user
+      if (data.userId === user?.id) return;
+      
       setUploadedImages(prev => prev.map(img => 
         img.id === data.imageId ? { ...img, isLocked: true, isSelected: false } : img
       ));
@@ -215,7 +351,10 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       setIsImageMode(false);
     });
 
-    socket.on('whiteboardImageUnlock', (data: { imageId: string; userName: string }) => {
+    socket.on('whiteboardImageUnlock', (data: { imageId: string; userId: string; userName: string }) => {
+      // Don't update if it's from the current user
+      if (data.userId === user?.id) return;
+      
       setUploadedImages(prev => prev.map(img => 
         img.id === data.imageId ? { ...img, isLocked: false } : img
       ));
@@ -226,8 +365,12 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       imageId: string; 
       x: number; 
       y: number; 
+      userId: string;
       userName: string 
     }) => {
+      // Don't update if it's from the current user
+      if (data.userId === user?.id) return;
+      
       setUploadedImages(prev => prev.map(img => 
         img.id === data.imageId ? { ...img, x: data.x, y: data.y } : img
       ));
@@ -239,8 +382,12 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       y: number; 
       width: number; 
       height: number; 
+      userId: string;
       userName: string 
     }) => {
+      // Don't update if it's from the current user
+      if (data.userId === user?.id) return;
+      
       setUploadedImages(prev => prev.map(img => 
         img.id === data.imageId ? { 
           ...img, 
@@ -254,15 +401,30 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
 
     // Join whiteboard room
     socket.emit('joinWhiteboard', { roomId, userName: user?.name || 'Anonymous' });
+    
+    // Request current state from other users in the room
+    setTimeout(() => {
+      socket.emit('requestWhiteboardState', { 
+        roomId, 
+        userId: user?.id, 
+        userName: user?.name || 'Anonymous' 
+      });
+    }, 1000); // Wait 1 second for other users to respond
 
     return () => {
+      socket.off('connect');
+      socket.off('disconnect');
       socket.off('whiteboardDraw');
       socket.off('whiteboardClear');
+      socket.off('whiteboardUndo');
+      socket.off('whiteboardRedo');
       socket.off('whiteboardImageUpload');
       socket.off('whiteboardImageLock');
       socket.off('whiteboardImageUnlock');
       socket.off('whiteboardImageMove');
       socket.off('whiteboardImageResize');
+      socket.off('requestWhiteboardState');
+      socket.off('whiteboardStateSync');
       socket.off('userJoinedWhiteboard');
       socket.off('userLeftWhiteboard');
       socket.emit('leaveWhiteboard', { roomId, userName: user?.name || 'Anonymous' });
@@ -285,7 +447,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
     // Save the current canvas state
@@ -455,7 +617,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
     // Get the last point from the ref for accurate drawing
@@ -514,7 +676,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
     ctx.fillStyle = '#ffffff';
@@ -589,6 +751,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
 
         // Send the uploaded image to other users
         if (socket) {
+          console.log('Sending image upload to other users:', newImage.id);
           socket.emit('whiteboardImageUpload', {
             roomId,
             imageData: event.target?.result as string,
@@ -612,7 +775,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
     // Save the current canvas state including drawings
@@ -634,7 +797,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
 
       const newIndex = historyIndex - 1;
@@ -668,7 +831,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
 
       const newIndex = historyIndex + 1;
@@ -771,9 +934,11 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
+    console.log('Rendering background images, count:', uploadedImages.length);
+    
     // Only render if there are images and we're not currently drawing
     if (uploadedImages.length === 0) return;
 
@@ -831,7 +996,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
     setIsRenderingImages(true);
@@ -927,6 +1092,26 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Sync Status Indicator */}
+          <div className={`flex items-center gap-1 text-sm px-2 py-1 rounded ${
+            syncStatus === 'connected' 
+              ? 'text-green-600 bg-green-50' 
+              : syncStatus === 'syncing' 
+              ? 'text-yellow-600 bg-yellow-50' 
+              : 'text-red-600 bg-red-50'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${
+              syncStatus === 'connected' 
+                ? 'bg-green-500' 
+                : syncStatus === 'syncing' 
+                ? 'bg-yellow-500 animate-pulse' 
+                : 'bg-red-500'
+            }`}></div>
+            <span className="hidden sm:inline">
+              {syncStatus === 'connected' ? 'Live Sync' : syncStatus === 'syncing' ? 'Syncing...' : 'Disconnected'}
+            </span>
+          </div>
+          
           {isImageMode && (
             <div className="flex items-center gap-1 text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded">
               <span>📷</span>
