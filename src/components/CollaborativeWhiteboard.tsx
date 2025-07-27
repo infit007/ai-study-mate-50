@@ -93,6 +93,22 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       clearCanvas();
     });
 
+    socket.on('whiteboardImageUpload', (data: { imageData: string; userName: string }) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Clear canvas and draw the uploaded image
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = data.imageData;
+    });
+
     socket.on('userJoinedWhiteboard', (userName: string) => {
       setActiveUsers(prev => [...prev, userName]);
     });
@@ -251,6 +267,16 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
         // Clear canvas and draw image
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Send the uploaded image to other users
+        if (socket) {
+          socket.emit('whiteboardImageUpload', {
+            roomId,
+            imageData: event.target?.result as string,
+            userId: user?.id,
+            userName: user?.name || 'Anonymous'
+          });
+        }
       };
       img.src = event.target?.result as string;
     };

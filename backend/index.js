@@ -470,6 +470,19 @@ async function getAIResponseWithContext(prompt, roomId) {
 io.on('connection', (socket) => {
   socket.on('joinRoom', (roomId) => {
     socket.join(roomId);
+    socket.roomId = roomId;
+    
+    // Get current users in the room and send to the new user
+    const room = io.sockets.adapter.rooms.get(roomId);
+    if (room) {
+      const users = Array.from(room).map(socketId => {
+        const userSocket = io.sockets.sockets.get(socketId);
+        return userSocket?.userName || 'Anonymous';
+      }).filter(userName => userName !== (socket.userName || 'Anonymous'));
+      
+      socket.emit('currentUsers', users);
+    }
+    
     // Notify other users in the room
     socket.to(roomId).emit('userJoined', socket.userName || 'Anonymous');
   });
@@ -553,6 +566,15 @@ io.on('connection', (socket) => {
     console.log(`Whiteboard cleared in room ${roomId}`);
   });
 
+  socket.on('whiteboardImageUpload', ({ roomId, imageData, userId, userName }) => {
+    // Broadcast image upload to all users in the whiteboard room
+    socket.to(`whiteboard-${roomId}`).emit('whiteboardImageUpload', {
+      imageData,
+      userName
+    });
+    console.log(`Image uploaded by ${userName} in room ${roomId}`);
+  });
+
   socket.on('getOnlineUsers', (roomId) => {
     // Get all users in the room
     const room = io.sockets.adapter.rooms.get(roomId);
@@ -568,11 +590,9 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('User disconnected');
     // Notify other users when someone leaves
-    socket.rooms.forEach(roomId => {
-      if (roomId !== socket.id) {
-        socket.to(roomId).emit('userLeft', socket.userName || 'Anonymous');
-      }
-    });
+    if (socket.roomId) {
+      socket.to(socket.roomId).emit('userLeft', socket.userName || 'Anonymous');
+    }
   });
 });
 

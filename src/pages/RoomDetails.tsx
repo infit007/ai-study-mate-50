@@ -85,9 +85,51 @@ const RoomDetails = () => {
       }
     });
 
+    // Listen for user join/leave events
+    socket.on('userJoined', (userName: string) => {
+      console.log('User joined:', userName);
+      // Add user to participants if not already present
+      setParticipants(prev => {
+        const existing = prev.find(p => p.name === userName);
+        if (!existing) {
+          return [...prev, {
+            id: `temp-${Date.now()}`,
+            name: userName,
+            subject: room?.subject || 'General',
+            status: 'online'
+          }];
+        }
+        return prev;
+      });
+    });
+
+    socket.on('userLeft', (userName: string) => {
+      console.log('User left:', userName);
+      // Remove user from participants
+      setParticipants(prev => prev.filter(p => p.name !== userName));
+    });
+
+    socket.on('currentUsers', (users: string[]) => {
+      console.log('Current users in room:', users);
+      // Add existing users to participants
+      setParticipants(prev => {
+        const existingNames = prev.map(p => p.name);
+        const newUsers = users.filter(userName => !existingNames.includes(userName));
+        return [...prev, ...newUsers.map(userName => ({
+          id: `temp-${Date.now()}-${userName}`,
+          name: userName,
+          subject: room?.subject || 'General',
+          status: 'online'
+        }))];
+      });
+    });
+
     socketRef.current = socket;
 
     return () => {
+      socket.off('userJoined');
+      socket.off('userLeft');
+      socket.off('currentUsers');
       socket.disconnect();
     };
   }, [id]);

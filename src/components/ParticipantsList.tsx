@@ -31,24 +31,24 @@ const ParticipantsList: React.FC<ParticipantsListProps> = ({
 
     // Listen for user join/leave events
     socket.on('userJoined', (userName: string) => {
+      console.log('User joined participants:', userName);
       setOnlineUsers(prev => [...prev, userName]);
     });
 
     socket.on('userLeft', (userName: string) => {
+      console.log('User left participants:', userName);
       setOnlineUsers(prev => prev.filter(name => name !== userName));
     });
 
-    // Get initial online users
-    socket.emit('getOnlineUsers', roomId);
-
-    socket.on('onlineUsers', (users: string[]) => {
+    socket.on('currentUsers', (users: string[]) => {
+      console.log('Current users in participants:', users);
       setOnlineUsers(users);
     });
 
     return () => {
       socket.off('userJoined');
       socket.off('userLeft');
-      socket.off('onlineUsers');
+      socket.off('currentUsers');
     };
   }, [socket, roomId]);
 
