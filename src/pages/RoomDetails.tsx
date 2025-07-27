@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import CollaborativeWhiteboard from "@/components/CollaborativeWhiteboard";
 import PomodoroTimer from "@/components/PomodoroTimer";
+import ParticipantsList from "@/components/ParticipantsList";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
@@ -20,6 +21,8 @@ const RoomDetails = () => {
   const [error, setError] = useState("");
   const [isAITyping, setIsAITyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [isWhiteboardOpen, setIsWhiteboardOpen] = useState(false);
+  const [participants, setParticipants] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const user = JSON.parse(localStorage.getItem("user") || "null");
@@ -38,6 +41,15 @@ const RoomDetails = () => {
           setError("Room not found.");
         } else {
           setRoom(found);
+          // Set participants from room data
+          if (found.participants) {
+            setParticipants(found.participants.map((p: any) => ({
+              id: p.userId,
+              name: p.user?.name || 'Anonymous',
+              subject: found.subject,
+              status: 'online'
+            })));
+          }
         }
       } catch (err) {
         console.error("Room fetch error:", err);
@@ -63,6 +75,7 @@ const RoomDetails = () => {
 
     // Initialize socket and join room
     const socket = io(SOCKET_URL, { transports: ["websocket"] });
+    (socket as any).userName = user?.name || 'Anonymous';
     socket.emit("joinRoom", id);
     socket.on("chatMessage", (msg: any) => {
       setMessages((prev) => [...prev, msg]);
@@ -126,13 +139,15 @@ const RoomDetails = () => {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-6">
           {/* Main Study Area - Whiteboard and Timer */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-4 lg:space-y-6">
             <CollaborativeWhiteboard 
               roomId={id!} 
               socket={socketRef.current} 
-              user={user} 
+              user={user}
+              isOpen={isWhiteboardOpen}
+              onToggle={() => setIsWhiteboardOpen(!isWhiteboardOpen)}
             />
             <PomodoroTimer 
               onSessionComplete={() => {
@@ -148,8 +163,14 @@ const RoomDetails = () => {
             />
           </div>
 
-          {/* Chat Sidebar */}
-          <div className="lg:col-span-1">
+          {/* Sidebar - Participants and Chat */}
+          <div className="lg:col-span-1 space-y-4 lg:space-y-6">
+            <ParticipantsList
+              roomId={id!}
+              socket={socketRef.current}
+              user={user}
+              participants={participants}
+            />
             <div className="bg-gradient-to-br from-white/90 to-blue-50/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/20 overflow-hidden">
               <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4">
                 <h2 className="text-xl font-semibold text-white flex items-center gap-2">

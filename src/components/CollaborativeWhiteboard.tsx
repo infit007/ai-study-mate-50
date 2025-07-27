@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Palette, Eraser, RotateCcw, Download, Upload, Users } from 'lucide-react';
+import { Palette, Eraser, RotateCcw, Download, Upload, Users, ChevronDown, ChevronUp, X } from 'lucide-react';
 
 interface Point {
   x: number;
@@ -21,12 +21,16 @@ interface CollaborativeWhiteboardProps {
   roomId: string;
   socket: any;
   user: any;
+  isOpen?: boolean;
+  onToggle?: () => void;
 }
 
 const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
   roomId,
   socket,
-  user
+  user,
+  isOpen = false,
+  onToggle
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -242,26 +246,52 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
   };
 
   return (
-    <Card className="p-6 bg-white">
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="font-semibold flex items-center gap-2">
-          <Palette className="w-4 h-4" />
-          Collaborative Whiteboard
-        </h4>
+    <Card className="bg-white">
+      {/* Header with toggle functionality */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <div className="flex items-center gap-2">
+          <h4 className="font-semibold flex items-center gap-2">
+            <Palette className="w-4 h-4" />
+            Collaborative Whiteboard
+          </h4>
           <div className="flex items-center gap-1 text-sm text-gray-600">
             <Users className="w-4 h-4" />
             <span>{activeUsers.length + 1} active</span>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          {onToggle && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggle}
+              className="flex items-center gap-1"
+            >
+              {isOpen ? (
+                <>
+                  <ChevronUp className="w-4 h-4" />
+                  <span className="hidden sm:inline">Close</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-4 h-4" />
+                  <span className="hidden sm:inline">Open</span>
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
-        {/* Color Palette */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700">Colors:</span>
-          <div className="flex gap-1">
+            {/* Collapsible content */}
+      {isOpen && (
+        <div className="p-4">
+                    {/* Toolbar */}
+          <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg">
+            {/* Color Palette */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-gray-700 hidden sm:inline">Colors:</span>
+              <div className="flex gap-1">
             {colors.map((c) => (
               <button
                 key={c}
@@ -278,10 +308,10 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
           </div>
         </div>
 
-        {/* Brush Size */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700">Size:</span>
-          <div className="flex gap-1">
+                    {/* Brush Size */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-gray-700 hidden sm:inline">Size:</span>
+              <div className="flex gap-1">
             {brushSizes.map((size) => (
               <button
                 key={size}
@@ -296,63 +326,63 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
           </div>
         </div>
 
-        {/* Eraser */}
-        <Button
-          variant={isErasing ? "default" : "outline"}
-          size="sm"
-          onClick={() => setIsErasing(!isErasing)}
-          className="flex items-center gap-2"
-        >
-          <Eraser className="w-4 h-4" />
-          Eraser
-        </Button>
+                    {/* Eraser */}
+            <Button
+              variant={isErasing ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIsErasing(!isErasing)}
+              className="flex items-center gap-2"
+            >
+              <Eraser className="w-4 h-4" />
+              <span className="hidden sm:inline">Eraser</span>
+            </Button>
 
-        {/* Clear */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleClear}
-          className="flex items-center gap-2"
-        >
-          <RotateCcw className="w-4 h-4" />
-          Clear
-        </Button>
+                    {/* Clear */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClear}
+              className="flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span className="hidden sm:inline">Clear</span>
+            </Button>
 
-        {/* Download */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={downloadCanvas}
-          className="flex items-center gap-2"
-        >
-          <Download className="w-4 h-4" />
-          Save
-        </Button>
+                    {/* Download */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={downloadCanvas}
+              className="flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Save</span>
+            </Button>
 
-        {/* Upload */}
-        <div className="relative">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileUpload}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex items-center gap-2"
-          >
-            <Upload className="w-4 h-4" />
-            Load
-          </Button>
-        </div>
+                    {/* Upload */}
+            <div className="relative">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <Upload className="w-4 h-4" />
+                <span className="hidden sm:inline">Load</span>
+              </Button>
+            </div>
       </div>
 
       {/* Canvas */}
       <div className="relative">
         <canvas
           ref={canvasRef}
-          className="w-full h-96 border-2 border-gray-200 rounded-lg cursor-crosshair bg-white"
+          className="w-full h-64 sm:h-80 md:h-96 border-2 border-gray-200 rounded-lg cursor-crosshair bg-white"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -367,10 +397,12 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
         )}
       </div>
 
-      {/* Instructions */}
-      <div className="mt-4 text-sm text-gray-600 text-center">
-        Draw, annotate, and solve problems together. Your changes appear in real-time for all participants.
-      </div>
+          {/* Instructions */}
+          <div className="mt-4 text-sm text-gray-600 text-center">
+            Draw, annotate, and solve problems together. Your changes appear in real-time for all participants.
+          </div>
+        </div>
+      )}
     </Card>
   );
 };

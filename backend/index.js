@@ -470,6 +470,8 @@ async function getAIResponseWithContext(prompt, roomId) {
 io.on('connection', (socket) => {
   socket.on('joinRoom', (roomId) => {
     socket.join(roomId);
+    // Notify other users in the room
+    socket.to(roomId).emit('userJoined', socket.userName || 'Anonymous');
   });
 
   socket.on('chatMessage', async ({ roomId, userId, content }) => {
@@ -551,8 +553,26 @@ io.on('connection', (socket) => {
     console.log(`Whiteboard cleared in room ${roomId}`);
   });
 
+  socket.on('getOnlineUsers', (roomId) => {
+    // Get all users in the room
+    const room = io.sockets.adapter.rooms.get(roomId);
+    if (room) {
+      const users = Array.from(room).map(socketId => {
+        const userSocket = io.sockets.sockets.get(socketId);
+        return userSocket?.userName || 'Anonymous';
+      });
+      socket.emit('onlineUsers', users);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected');
+    // Notify other users when someone leaves
+    socket.rooms.forEach(roomId => {
+      if (roomId !== socket.id) {
+        socket.to(roomId).emit('userLeft', socket.userName || 'Anonymous');
+      }
+    });
   });
 });
 
