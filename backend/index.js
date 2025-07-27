@@ -276,6 +276,37 @@ app.get('/api/rooms', async (req, res) => {
   }
 });
 
+app.get('/api/rooms/:id', authMiddleware, async (req, res) => {
+  try {
+    const roomId = req.params.id;
+    const room = await prisma.studyRoom.findUnique({
+      where: { id: roomId },
+      include: { 
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        }
+      },
+    });
+    
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found.' });
+    }
+    
+    res.json(room);
+  } catch (err) {
+    console.error('Error fetching room:', err);
+    res.status(500).json({ error: 'Failed to fetch room.' });
+  }
+});
+
 app.post('/api/rooms', authMiddleware, async (req, res) => {
   const { name, subject, maxParticipants, isPrivate = false } = req.body;
   if (!name || !subject || !maxParticipants) return res.status(400).json({ error: 'Missing fields.' });
@@ -402,7 +433,7 @@ app.delete('/api/rooms/:id', authMiddleware, async (req, res) => {
   }
 });
 
-app.get('/api/rooms/:id/messages', async (req, res) => {
+app.get('/api/rooms/:id/messages', authMiddleware, async (req, res) => {
   const roomId = req.params.id;
   try {
     const messages = await prisma.message.findMany({
@@ -410,15 +441,13 @@ app.get('/api/rooms/:id/messages', async (req, res) => {
       orderBy: { createdAt: 'asc' },
       include: { user: true },
     });
-    res.json({
-      messages: messages.map(msg => ({
-        id: msg.id,
-        userId: msg.userId,
-        userName: msg.user?.name || "Unknown",
-        content: msg.content,
-        createdAt: msg.createdAt,
-      })),
-    });
+    res.json(messages.map(msg => ({
+      id: msg.id,
+      userId: msg.userId,
+      userName: msg.user?.name || "Unknown",
+      content: msg.content,
+      createdAt: msg.createdAt,
+    })));
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch messages.' });
   }
