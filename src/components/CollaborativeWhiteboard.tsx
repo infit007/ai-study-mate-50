@@ -39,6 +39,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
   const [isErasing, setIsErasing] = useState(false);
   const [activeUsers, setActiveUsers] = useState<string[]>([]);
   const [currentPath, setCurrentPath] = useState<Point[]>([]);
+  const currentPathRef = useRef<Point[]>([]);
 
   const colors = [
     '#ef4444', // red
@@ -117,9 +118,12 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     if (!canvas) return { x: 0, y: 0 };
 
     const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
     };
   }, []);
 
@@ -148,13 +152,16 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     setIsDrawing(true);
     const point = getCanvasCoordinates(e);
     setCurrentPath([point]);
+    currentPathRef.current = [point];
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
 
     const point = getCanvasCoordinates(e);
-    setCurrentPath(prev => [...prev, point]);
+    const newPath = [...currentPathRef.current, point];
+    setCurrentPath(newPath);
+    currentPathRef.current = newPath;
 
     // Draw locally
     const canvas = canvasRef.current;
@@ -163,18 +170,22 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.beginPath();
-    ctx.moveTo(currentPath[currentPath.length - 1]?.x || point.x, currentPath[currentPath.length - 1]?.y || point.y);
-    ctx.lineTo(point.x, point.y);
-    ctx.strokeStyle = isErasing ? '#ffffff' : color;
-    ctx.lineWidth = brushSize;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.stroke();
+    // Get the last point from the ref for accurate drawing
+    const lastPoint = currentPathRef.current[currentPathRef.current.length - 2];
+    if (lastPoint) {
+      ctx.beginPath();
+      ctx.moveTo(lastPoint.x, lastPoint.y);
+      ctx.lineTo(point.x, point.y);
+      ctx.strokeStyle = isErasing ? '#ffffff' : color;
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    }
   };
 
   const handleMouseUp = () => {
-    if (!isDrawing || currentPath.length === 0) return;
+    if (!isDrawing || currentPathRef.current.length === 0) return;
 
     setIsDrawing(false);
 
@@ -182,7 +193,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     if (socket) {
       socket.emit('whiteboardDraw', {
         roomId,
-        points: currentPath,
+        points: currentPathRef.current,
         color,
         brushSize,
         type: isErasing ? 'erase' : 'draw',
@@ -192,6 +203,7 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     }
 
     setCurrentPath([]);
+    currentPathRef.current = [];
   };
 
   const clearCanvas = () => {
@@ -382,11 +394,33 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       <div className="relative">
         <canvas
           ref={canvasRef}
-          className="w-full h-64 sm:h-80 md:h-96 border-2 border-gray-200 rounded-lg cursor-crosshair bg-white"
+          className="w-full h-64 sm:h-80 md:h-96 border-2 border-gray-200 rounded-lg cursor-crosshair bg-white touch-none"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+              clientX: touch.clientX,
+              clientY: touch.clientY
+            });
+            handleMouseDown(mouseEvent as any);
+          }}
+          onTouchMove={(e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+              clientX: touch.clientX,
+              clientY: touch.clientY
+            });
+            handleMouseMove(mouseEvent as any);
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            handleMouseUp();
+          }}
         />
         
         {/* Drawing indicator */}
