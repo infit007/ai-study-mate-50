@@ -168,38 +168,133 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       clearCanvas();
     });
 
-    socket.on('whiteboardImageUpload', (data: { imageData: string; userName: string }) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-
-        // Clear canvas and draw the uploaded image
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    socket.on('whiteboardImageUpload', (data: { 
+      imageData: string; 
+      imageId: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      userName: string 
+    }) => {
+      // Don't add the image if it's from the current user
+      if (data.userName === user?.name) return;
+      
+      const newImage: UploadedImage = {
+        id: data.imageId,
+        src: data.imageData,
+        x: data.x,
+        y: data.y,
+        width: data.width,
+        height: data.height,
+        originalWidth: data.width,
+        originalHeight: data.height,
+        isLocked: false,
+        isSelected: false,
+        isResizing: false,
+        isMoving: false
       };
-      img.src = data.imageData;
+
+      setUploadedImages(prev => [...prev, newImage]);
     });
 
     socket.on('userJoinedWhiteboard', (userName: string) => {
       setActiveUsers(prev => [...prev, userName]);
     });
 
+    // Request existing images when joining
+    socket.on('requestExistingImages', () => {
+      if (uploadedImages.length > 0) {
+        uploadedImages.forEach(image => {
+          socket.emit('whiteboardImageUpload', {
+            roomId,
+            imageData: image.src,
+            imageId: image.id,
+            x: image.x,
+            y: image.y,
+            width: image.width,
+            height: image.height,
+            userId: user?.id,
+            userName: user?.name || 'Anonymous'
+          });
+        });
+      }
+    });
+
     socket.on('userLeftWhiteboard', (userName: string) => {
       setActiveUsers(prev => prev.filter(name => name !== userName));
     });
 
+    // Image operation events
+    socket.on('whiteboardImageMove', (data: { 
+      imageId: string; 
+      x: number; 
+      y: number; 
+      userName: string 
+    }) => {
+      if (data.userName === user?.name) return;
+      
+      setUploadedImages(prev => prev.map(img => 
+        img.id === data.imageId ? { ...img, x: data.x, y: data.y } : img
+      ));
+    });
+
+    socket.on('whiteboardImageResize', (data: { 
+      imageId: string; 
+      x: number; 
+      y: number; 
+      width: number; 
+      height: number; 
+      userName: string 
+    }) => {
+      if (data.userName === user?.name) return;
+      
+      setUploadedImages(prev => prev.map(img => 
+        img.id === data.imageId ? { ...img, x: data.x, y: data.y, width: data.width, height: data.height } : img
+      ));
+    });
+
+    socket.on('whiteboardImageLock', (data: { 
+      imageId: string; 
+      userName: string 
+    }) => {
+      if (data.userName === user?.name) return;
+      
+      setUploadedImages(prev => prev.map(img => 
+        img.id === data.imageId ? { ...img, isLocked: true, isSelected: false } : img
+      ));
+    });
+
+    socket.on('whiteboardImageUnlock', (data: { 
+      imageId: string; 
+      userName: string 
+    }) => {
+      if (data.userName === user?.name) return;
+      
+      setUploadedImages(prev => prev.map(img => 
+        img.id === data.imageId ? { ...img, isLocked: false } : img
+      ));
+    });
+
     // Join whiteboard room
     socket.emit('joinWhiteboard', { roomId, userName: user?.name || 'Anonymous' });
+    
+    // Request existing images after joining
+    setTimeout(() => {
+      socket.emit('requestExistingImages', { roomId });
+    }, 100);
 
     return () => {
       socket.off('whiteboardDraw');
       socket.off('whiteboardClear');
+      socket.off('whiteboardImageUpload');
+      socket.off('whiteboardImageMove');
+      socket.off('whiteboardImageResize');
+      socket.off('whiteboardImageLock');
+      socket.off('whiteboardImageUnlock');
       socket.off('userJoinedWhiteboard');
       socket.off('userLeftWhiteboard');
+      socket.off('requestExistingImages');
       socket.emit('leaveWhiteboard', { roomId, userName: user?.name || 'Anonymous' });
     };
   }, [socket, roomId, user]);
@@ -327,6 +422,20 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
         setUploadedImages(prev => prev.map(img => 
           img.id === selectedImageId ? { ...img, x: newX, y: newY, width: newWidth, height: newHeight } : img
         ));
+        
+        // Send resize action to other users
+        if (socket) {
+          socket.emit('whiteboardImageResize', {
+            roomId,
+            imageId: selectedImageId,
+            x: newX,
+            y: newY,
+            width: newWidth,
+            height: newHeight,
+            userId: user?.id,
+            userName: user?.name || 'Anonymous'
+          });
+        }
       }
       return;
     }
@@ -343,6 +452,18 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
           img.id === selectedImageId ? { ...img, x: img.x + deltaX, y: img.y + deltaY } : img
         ));
         setDragStart(point);
+        
+        // Send move action to other users
+        if (socket) {
+          socket.emit('whiteboardImageMove', {
+            roomId,
+            imageId: selectedImageId,
+            x: image.x + deltaX,
+            y: image.y + deltaY,
+            userId: user?.id,
+            userName: user?.name || 'Anonymous'
+          });
+        }
         
         // Prevent drawing during image movement
         return;
