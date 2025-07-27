@@ -636,6 +636,34 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Call management events
+  socket.on('startCall', ({ roomId, userId, userName }) => {
+    // Notify all users in the room that a call has started
+    socket.to(roomId).emit('callStarted', { 
+      startedBy: userId, 
+      startedByUser: userName 
+    });
+    console.log(`${userName} started a call in room ${roomId}`);
+  });
+
+  socket.on('endCall', ({ roomId, userId, userName }) => {
+    // Notify all users in the room that the call has ended
+    socket.to(roomId).emit('callEnded');
+    console.log(`${userName} ended the call in room ${roomId}`);
+  });
+
+  socket.on('joinCall', ({ roomId, userId, userName }) => {
+    // Notify other users that someone joined the call
+    socket.to(roomId).emit('userJoinedCall', { userId, userName });
+    console.log(`${userName} joined the call in room ${roomId}`);
+  });
+
+  socket.on('leaveCall', ({ roomId, userId, userName }) => {
+    // Notify other users that someone left the call
+    socket.to(roomId).emit('userLeftCall', { userId, userName });
+    console.log(`${userName} left the call in room ${roomId}`);
+  });
+
   // Audio streaming events
   socket.on('audioStart', ({ roomId, userId, userName }) => {
     // Notify other users that someone started speaking
@@ -651,6 +679,7 @@ io.on('connection', (socket) => {
 
   // WebRTC signaling events
   socket.on('audioOffer', ({ roomId, targetUserId, offer }) => {
+    console.log(`Audio offer from ${socket.userId} to ${targetUserId} in room ${roomId}`);
     // Forward the offer to the target user
     const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.userId === targetUserId);
     if (targetSocket) {
@@ -658,10 +687,14 @@ io.on('connection', (socket) => {
         fromUserId: socket.userId, 
         offer 
       });
+      console.log(`Audio offer forwarded to ${targetUserId}`);
+    } else {
+      console.log(`Target user ${targetUserId} not found for audio offer`);
     }
   });
 
   socket.on('audioAnswer', ({ roomId, targetUserId, answer }) => {
+    console.log(`Audio answer from ${socket.userId} to ${targetUserId} in room ${roomId}`);
     // Forward the answer to the target user
     const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.userId === targetUserId);
     if (targetSocket) {
@@ -669,10 +702,14 @@ io.on('connection', (socket) => {
         fromUserId: socket.userId, 
         answer 
       });
+      console.log(`Audio answer forwarded to ${targetUserId}`);
+    } else {
+      console.log(`Target user ${targetUserId} not found for audio answer`);
     }
   });
 
   socket.on('audioIceCandidate', ({ roomId, targetUserId, candidate }) => {
+    console.log(`ICE candidate from ${socket.userId} to ${targetUserId} in room ${roomId}`);
     // Forward the ICE candidate to the target user
     const targetSocket = Array.from(io.sockets.sockets.values()).find(s => s.userId === targetUserId);
     if (targetSocket) {
@@ -680,6 +717,9 @@ io.on('connection', (socket) => {
         fromUserId: socket.userId, 
         candidate 
       });
+      console.log(`ICE candidate forwarded to ${targetUserId}`);
+    } else {
+      console.log(`Target user ${targetUserId} not found for ICE candidate`);
     }
   });
 

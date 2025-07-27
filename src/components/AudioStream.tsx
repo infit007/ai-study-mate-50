@@ -8,6 +8,7 @@ interface AudioStreamProps {
   user: any;
   isActive: boolean;
   onActiveSpeakersChange: (speakers: string[]) => void;
+  callParticipants?: string[];
 }
 
 interface PeerConnection {
@@ -21,7 +22,8 @@ const AudioStream: React.FC<AudioStreamProps> = ({
   socket,
   user,
   isActive,
-  onActiveSpeakersChange
+  onActiveSpeakersChange,
+  callParticipants = []
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -57,7 +59,7 @@ const AudioStream: React.FC<AudioStreamProps> = ({
       
       if (localAudioRef.current) {
         localAudioRef.current.srcObject = stream;
-        localAudioRef.current.muted = true; // Mute local audio to prevent feedback
+        localAudioRef.current.muted = true; // Mute local audio to prevent echo
       }
       
       setIsConnected(true);
@@ -81,10 +83,16 @@ const AudioStream: React.FC<AudioStreamProps> = ({
 
     // Handle incoming audio streams
     pc.ontrack = (event) => {
+      console.log('Received track from peer:', peerId, event.streams[0]);
+      
       const audioElement = document.createElement('audio');
       audioElement.autoplay = true;
       audioElement.controls = false;
+      audioElement.muted = false; // Ensure audio is not muted
       audioElement.srcObject = event.streams[0];
+      
+      // Add audio element to DOM so it can play
+      document.body.appendChild(audioElement);
       
       // Store peer connection info
       const peerConnection: PeerConnection = {
@@ -100,12 +108,22 @@ const AudioStream: React.FC<AudioStreamProps> = ({
       setActiveSpeakers(prev => [...prev, peerId]);
       onActiveSpeakersChange([...activeSpeakers, peerId]);
       
-      console.log('Received audio stream from:', peerId);
+      console.log('Audio element added to DOM for peer:', peerId);
+      
+      // Try to play the audio
+      audioElement.play().catch(error => {
+        console.error('Failed to play audio for peer:', peerId, error);
+      });
     };
 
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      console.log(`Peer connection state for ${peerId}:`, pc.connectionState);
+      
+      if (pc.connectionState === 'connected') {
+        console.log(`WebRTC connection established with ${peerId}`);
+      } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+        console.log(`WebRTC connection lost with ${peerId}`);
         // Remove peer connection
         peerConnectionsRef.current.delete(peerId);
         setPeerConnections(new Map(peerConnectionsRef.current));
@@ -114,6 +132,16 @@ const AudioStream: React.FC<AudioStreamProps> = ({
         setActiveSpeakers(prev => prev.filter(id => id !== peerId));
         onActiveSpeakersChange(activeSpeakers.filter(id => id !== peerId));
       }
+    };
+
+    // Handle ICE connection state changes
+    pc.oniceconnectionstatechange = () => {
+      console.log(`ICE connection state for ${peerId}:`, pc.iceConnectionState);
+    };
+
+    // Handle ICE gathering state changes
+    pc.onicegatheringstatechange = () => {
+      console.log(`ICE gathering state for ${peerId}:`, pc.iceGatheringState);
     };
 
     return pc;
@@ -179,6 +207,17 @@ const AudioStream: React.FC<AudioStreamProps> = ({
     }
   };
 
+  // Test audio playback
+  const testAudioPlayback = () => {
+    const testAudio = new Audio();
+    testAudio.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT';
+    testAudio.play().then(() => {
+      console.log('Test audio played successfully');
+    }).catch(error => {
+      console.error('Test audio failed:', error);
+    });
+  };
+
   // Socket event listeners
   useEffect(() => {
     if (!socket) return;
@@ -187,22 +226,33 @@ const AudioStream: React.FC<AudioStreamProps> = ({
     socket.on('userJoined', async (data: { userId: string; userName: string }) => {
       if (data.userId === user?.id) return; // Don't connect to self
       
-      console.log('New user joined, creating peer connection:', data.userId);
-      const pc = createPeerConnection(data.userId);
-      
-      // Create and send offer
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        
-        socket.emit('audioOffer', {
-          roomId,
-          targetUserId: data.userId,
-          offer
-        });
-      } catch (error) {
-        console.error('Error creating offer:', error);
+      // Only create peer connection if both users are in the call
+      if (callParticipants.length > 0 && !callParticipants.includes(data.userId)) {
+        console.log('User not in call, skipping peer connection:', data.userId);
+        return;
       }
+      
+      console.log('New user joined, creating peer connection:', data.userId);
+      
+      // Wait a bit for the user to be ready
+      setTimeout(async () => {
+        const pc = createPeerConnection(data.userId);
+        
+        // Create and send offer
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          
+          console.log('Sending offer to:', data.userId);
+          socket.emit('audioOffer', {
+            roomId,
+            targetUserId: data.userId,
+            offer
+          });
+        } catch (error) {
+          console.error('Error creating offer:', error);
+        }
+      }, 1000);
     });
 
     // Handle audio offer
@@ -217,6 +267,7 @@ const AudioStream: React.FC<AudioStreamProps> = ({
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         
+        console.log('Sending answer to:', data.fromUserId);
         socket.emit('audioAnswer', {
           roomId,
           targetUserId: data.fromUserId,
@@ -237,9 +288,12 @@ const AudioStream: React.FC<AudioStreamProps> = ({
       if (peerConnection) {
         try {
           await peerConnection.connection.setRemoteDescription(new RTCSessionDescription(data.answer));
+          console.log('Remote description set for peer:', data.fromUserId);
         } catch (error) {
           console.error('Error handling answer:', error);
         }
+      } else {
+        console.warn('No peer connection found for answer from:', data.fromUserId);
       }
     });
 
@@ -262,7 +316,10 @@ const AudioStream: React.FC<AudioStreamProps> = ({
       const peerConnection = peerConnectionsRef.current.get(data.userId);
       if (peerConnection) {
         peerConnection.connection.close();
-        peerConnection.audioElement.remove();
+        // Remove audio element from DOM
+        if (peerConnection.audioElement.parentNode) {
+          peerConnection.audioElement.parentNode.removeChild(peerConnection.audioElement);
+        }
         peerConnectionsRef.current.delete(data.userId);
         setPeerConnections(new Map(peerConnectionsRef.current));
         
@@ -312,10 +369,13 @@ const AudioStream: React.FC<AudioStreamProps> = ({
         localStream.getTracks().forEach(track => track.stop());
       }
       
-      // Close all peer connections
+      // Close all peer connections and remove audio elements
       peerConnectionsRef.current.forEach((peerConnection) => {
         peerConnection.connection.close();
-        peerConnection.audioElement.remove();
+        // Remove audio element from DOM
+        if (peerConnection.audioElement.parentNode) {
+          peerConnection.audioElement.parentNode.removeChild(peerConnection.audioElement);
+        }
       });
       peerConnectionsRef.current.clear();
     };
@@ -375,6 +435,21 @@ const AudioStream: React.FC<AudioStreamProps> = ({
           </span>
         </div>
       )}
+      
+      {/* Debug info */}
+      <div className="text-xs text-gray-500">
+        Peers: {peerConnections.size}
+      </div>
+      
+      {/* Test audio button */}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={testAudioPlayback}
+        className="text-xs"
+      >
+        Test Audio
+      </Button>
     </div>
   );
 };

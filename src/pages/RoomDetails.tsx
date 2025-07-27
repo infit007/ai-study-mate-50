@@ -10,6 +10,7 @@ import ParticipantsList from "@/components/ParticipantsList";
 import InterfaceToggle from "@/components/InterfaceToggle";
 import ResizableLayout from "@/components/ResizableLayout";
 import AudioStream from "@/components/AudioStream";
+import CallButton from "@/components/CallButton";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
@@ -294,14 +295,7 @@ const RoomDetails = () => {
                           />
                         </div>
                         
-                        {/* Audio Stream Component for Sidebar */}
-                        <AudioStream
-                          roomId={id!}
-                          socket={socketRef.current}
-                          user={user}
-                          isActive={interfaceMode === 'whiteboard'}
-                          onActiveSpeakersChange={setActiveSpeakers}
-                        />
+
                         
                         <button 
                           type="submit" 
@@ -438,6 +432,16 @@ const RoomDetails = () => {
                     <div ref={messagesEndRef} />
                   </div>
 
+                  {/* Call Button */}
+                  <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-4 border-b border-white/20">
+                    <CallButton
+                      roomId={id!}
+                      socket={socketRef.current}
+                      user={user}
+                      participants={participants}
+                    />
+                  </div>
+                  
                   <div className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-4 border-t border-white/20 flex-shrink-0">
             <form onSubmit={handleSend} className="flex gap-3">
               <div className="flex-1 relative">
@@ -450,15 +454,6 @@ const RoomDetails = () => {
                   required
                 />
               </div>
-              
-              {/* Audio Stream Component */}
-              <AudioStream
-                roomId={id!}
-                socket={socketRef.current}
-                user={user}
-                isActive={interfaceMode === 'chat'}
-                onActiveSpeakersChange={setActiveSpeakers}
-              />
               
               <button 
                 type="submit" 
