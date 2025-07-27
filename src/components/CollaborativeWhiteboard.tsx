@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Palette, Eraser, RotateCcw, Download, Upload, Users, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Palette, Eraser, RotateCcw, Download, Upload, Users, Undo, Redo } from 'lucide-react';
 
 interface Point {
   x: number;
@@ -40,6 +40,10 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
   const [activeUsers, setActiveUsers] = useState<string[]>([]);
   const [currentPath, setCurrentPath] = useState<Point[]>([]);
   const currentPathRef = useRef<Point[]>([]);
+  const [drawingHistory, setDrawingHistory] = useState<ImageData[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const maxHistorySize = 50;
+  const [customSize, setCustomSize] = useState('');
 
   const colors = [
     '#ef4444', // red
@@ -94,8 +98,31 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Initialize history with blank canvas
+    const initialImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    setDrawingHistory([initialImageData]);
+    setHistoryIndex(0);
+
     return () => window.removeEventListener('resize', resizeCanvas);
   }, []);
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z' && !e.shiftKey) {
+          e.preventDefault();
+          handleUndo();
+        } else if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
+          e.preventDefault();
+          handleRedo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [historyIndex, drawingHistory.length]);
 
   // Socket event listeners
   useEffect(() => {
@@ -219,6 +246,9 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
 
     setIsDrawing(false);
 
+    // Save to history after drawing
+    saveToHistory();
+
     // Send drawing action to other users
     if (socket) {
       socket.emit('whiteboardDraw', {
@@ -297,10 +327,88 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
     reader.readAsDataURL(file);
   };
 
+  // Save current canvas state to history
+  const saveToHistory = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    
+    setDrawingHistory(prev => {
+      const newHistory = [...prev.slice(0, historyIndex + 1), imageData];
+      if (newHistory.length > maxHistorySize) {
+        newHistory.shift();
+      }
+      return newHistory;
+    });
+    setHistoryIndex(prev => Math.min(prev + 1, maxHistorySize - 1));
+  };
+
+  // Undo function
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const newIndex = historyIndex - 1;
+      ctx.putImageData(drawingHistory[newIndex], 0, 0);
+      setHistoryIndex(newIndex);
+
+      // Send undo action to other users
+      if (socket) {
+        socket.emit('whiteboardUndo', {
+          roomId,
+          userId: user?.id,
+          userName: user?.name || 'Anonymous'
+        });
+      }
+    }
+  };
+
+  // Redo function
+  const handleRedo = () => {
+    if (historyIndex < drawingHistory.length - 1) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const newIndex = historyIndex + 1;
+      ctx.putImageData(drawingHistory[newIndex], 0, 0);
+      setHistoryIndex(newIndex);
+
+      // Send redo action to other users
+      if (socket) {
+        socket.emit('whiteboardRedo', {
+          roomId,
+          userId: user?.id,
+          userName: user?.name || 'Anonymous'
+        });
+      }
+    }
+  };
+
+  const handleCustomSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCustomSize(value);
+    
+    const size = parseInt(value);
+    if (!isNaN(size) && size > 0 && size <= 50) {
+      setBrushSize(size);
+    }
+  };
+
   return (
-    <Card className="bg-white">
+    <Card className="bg-white min-h-[480px] flex flex-col">
       {/* Header with toggle functionality */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center gap-2">
           <h4 className="font-semibold flex items-center gap-2">
             <Palette className="w-4 h-4" />
@@ -312,34 +420,14 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {onToggle && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggle}
-              className="flex items-center gap-1"
-            >
-              {isOpen ? (
-                <>
-                  <ChevronUp className="w-4 h-4" />
-                  <span className="hidden sm:inline">Close</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-4 h-4" />
-                  <span className="hidden sm:inline">Open</span>
-                </>
-              )}
-            </Button>
-          )}
+          {/* Removed open/close button */}
         </div>
       </div>
 
-            {/* Collapsible content */}
-      {isOpen && (
-        <div className="p-4">
+            {/* Whiteboard content */}
+        <div className="p-4 flex flex-col flex-1 min-h-0">
                     {/* Toolbar */}
-          <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg">
+          <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-gray-50 rounded-lg flex-shrink-0">
             {/* Color Palette */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-gray-700 hidden sm:inline">Colors:</span>
@@ -376,6 +464,24 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
               </button>
             ))}
           </div>
+          
+          {/* Custom Size Input */}
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min="1"
+              max="50"
+              placeholder="Custom"
+              value={customSize}
+              onChange={handleCustomSizeChange}
+              className={`w-16 h-6 px-2 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 ${
+                customSize && !brushSizes.includes(parseInt(customSize) || 0) 
+                  ? 'border-blue-500 bg-blue-50' 
+                  : 'border-gray-300'
+              }`}
+            />
+            <span className="text-xs text-gray-500">px</span>
+          </div>
         </div>
 
                     {/* Eraser */}
@@ -387,6 +493,30 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
             >
               <Eraser className="w-4 h-4" />
               <span className="hidden sm:inline">Eraser</span>
+            </Button>
+
+                    {/* Undo */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUndo}
+              disabled={historyIndex <= 0}
+              className="flex items-center gap-2"
+            >
+              <Undo className="w-4 h-4" />
+              <span className="hidden sm:inline">Undo</span>
+            </Button>
+
+                    {/* Redo */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRedo}
+              disabled={historyIndex >= drawingHistory.length - 1}
+              className="flex items-center gap-2"
+            >
+              <Redo className="w-4 h-4" />
+              <span className="hidden sm:inline">Redo</span>
             </Button>
 
                     {/* Clear */}
@@ -431,10 +561,10 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       </div>
 
       {/* Canvas */}
-      <div className="relative">
+      <div className="relative flex-1 min-h-[320px]">
         <canvas
           ref={canvasRef}
-          className="w-full h-[600px] border-2 border-gray-200 rounded-lg cursor-crosshair bg-white touch-none"
+          className="w-full h-full border-2 border-gray-200 rounded-lg cursor-crosshair bg-white touch-none"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
@@ -472,11 +602,10 @@ const CollaborativeWhiteboard: React.FC<CollaborativeWhiteboardProps> = ({
       </div>
 
           {/* Instructions */}
-          <div className="mt-4 text-sm text-gray-600 text-center">
+          <div className="mt-4 text-sm text-gray-600 text-center flex-shrink-0">
             Draw, annotate, and solve problems together. Your changes appear in real-time for all participants.
           </div>
         </div>
-      )}
     </Card>
   );
 };

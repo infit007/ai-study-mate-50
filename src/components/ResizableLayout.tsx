@@ -59,12 +59,12 @@ const ResizableLayout: React.FC<ResizableLayoutProps> = ({
   return (
     <div 
       ref={containerRef}
-      className="flex w-full h-full relative min-h-[700px] max-h-[700px]"
+      className="flex w-full min-h-[480px] relative"
       style={{ cursor: isDragging ? 'col-resize' : 'default' }}
     >
       {/* Left Component */}
       <div 
-        className="flex-shrink-0 h-full"
+        className="flex-shrink-0 min-h-[480px]"
         style={{ width: `${leftWidth}%` }}
       >
         {leftComponent}
@@ -82,7 +82,7 @@ const ResizableLayout: React.FC<ResizableLayoutProps> = ({
 
       {/* Right Component */}
       <div 
-        className="flex-1 h-full"
+        className="flex-1 min-h-[480px]"
         style={{ width: `${100 - leftWidth}%` }}
       >
         {rightComponent}

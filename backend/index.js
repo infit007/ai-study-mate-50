@@ -27,6 +27,16 @@ async function testDatabaseConnection() {
     console.error('❌ Database connection failed:', error.message);
     console.error('Please check your DATABASE_URL environment variable');
     console.error('Current DATABASE_URL:', process.env.DATABASE_URL ? 'Set (hidden for security)' : 'Not set');
+    
+    // Provide helpful suggestions
+    console.log('\n🔧 Troubleshooting suggestions:');
+    console.log('1. Check if your Render database is running');
+    console.log('2. Verify your DATABASE_URL format');
+    console.log('3. Make sure your database credentials are correct');
+    console.log('4. Try using SQLite for local development');
+    
+    // Continue running the server even if database fails
+    console.log('\n⚠️  Server will continue running without database functionality');
   }
 }
 
