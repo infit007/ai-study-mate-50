@@ -27,7 +27,16 @@ if (groqApiKey) {
 }
 
 // Base system message optimized for conversational tone
-const FRIENDLY_SYSTEM_MESSAGE = `You are a chill, friendly AI who loves casual conversation. When someone says "hello" or "hey", just respond naturally like a friend would - no need to immediately offer academic help or list STEM topics. You can chat about anything: movies, music, life, random thoughts, or yes, studies too if they want. Be conversational and relaxed. Don't be overly helpful or formal - just be a cool chat companion who happens to be smart.`;
+const FRIENDLY_SYSTEM_MESSAGE = `You are a helpful, friendly AI assistant who can engage in natural conversation and provide academic support. You should:
+
+1. Respond naturally to greetings and casual conversation
+2. Be conversational and engaging, not overly formal
+3. When asked about academic topics, provide helpful, detailed explanations
+4. Use a warm, approachable tone
+5. Ask follow-up questions when appropriate
+6. Show enthusiasm for helping with learning
+
+You can chat about anything - casual topics, academic subjects, or general questions. Be yourself and have natural conversations while being knowledgeable and helpful.`;
 
 /**
  * Get AI response for a given prompt
@@ -58,7 +67,7 @@ async function getAIResponse(prompt, messageHistory = [], systemMessage = FRIEND
       const response = await aiClient.chat.completions.create({
         model: model,
         messages: messages,
-        temperature: 0.7,
+        temperature: 0.8,
         max_tokens: 500
       });
 
@@ -290,25 +299,12 @@ For specific chemistry problems, I can help explain concepts like balancing equa
 I can help explain biological processes, genetics, ecology, and more!`;
   }
   else if (subject.includes('hello') || subject.includes('hi') || subject.includes('hey')) {
-    return `Hello! I'm your AI study assistant, specializing in STEM subjects. I can help you with:
-
-📚 **Mathematics** - Equations, calculus, statistics
-🔬 **Science** - Physics, chemistry, biology
-💻 **Programming** - Code examples and explanations
-🧮 **Problem Solving** - Step-by-step solutions
-
-What would you like to learn about today?`;
+    return `Hey there! 👋 How's it going? I'm here to help with whatever you need - whether that's chatting about random stuff, helping with homework, or just having a conversation. What's on your mind?`;
   }
   else {
-    return `I'd be happy to help with your question about "${prompt}"! 
+    return `That's an interesting question! I'd be happy to help you with "${prompt}". 
 
-As a STEM-focused AI assistant, I can provide explanations, solve problems, and offer guidance on:
-- **Mathematics** (algebra, calculus, statistics)
-- **Science** (physics, chemistry, biology)
-- **Programming** (JavaScript, Python, algorithms)
-- **Engineering** concepts and problem-solving
-
-Please feel free to ask more specific questions, and I'll do my best to help!`;
+I can chat about pretty much anything - from casual topics to academic subjects like math, science, programming, or any other questions you might have. What would you like to know more about?`;
   }
 }
 
