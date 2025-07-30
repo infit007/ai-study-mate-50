@@ -18,7 +18,7 @@ const prisma = new PrismaClient();
 // Test database connection on startup
 async function testDatabaseConnection() {
   try {
-    await prisma.$connect();
+    await prisma.$connect(); 
     console.log('✅ Database connection successful');
     
     // Try to create tables if they don't exist
