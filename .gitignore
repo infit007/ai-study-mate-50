@@ -1,4 +1,4 @@
-# Logs
+.env
 logs
 *.log
 npm-debug.log*
@@ -12,14 +12,16 @@ dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# VS Code settings
 .vscode/*
 !.vscode/extensions.json
+
 .idea
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
+
+# Vim swap files
 *.sw?
-*.env
