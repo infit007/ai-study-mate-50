@@ -39,6 +39,14 @@ const Profile = () => {
         },
         body: JSON.stringify({ name: newName }),
       });
+      
+      // Check if response is JSON
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${res.status} ${res.statusText}. Please make sure the backend server is running.`);
+      }
+      
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update name");
       setUser(data.user);
@@ -46,7 +54,7 @@ const Profile = () => {
       setSuccess("Name updated successfully!");
       setEditing(false);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to update name. Please try again.");
     } finally {
       setLoading(false);
     }

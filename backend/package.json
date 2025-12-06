@@ -5,6 +5,7 @@
     "generate": "prisma generate",
     "migrate": "prisma migrate deploy",
     "postinstall": "prisma generate",
+    "dev": "npx prisma migrate deploy && node index.js",
     "start": "npx prisma migrate deploy && node index.js"
   },
   "dependencies": {

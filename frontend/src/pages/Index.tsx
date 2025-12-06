@@ -36,10 +36,15 @@ const Index = () => {
     setError("");
     try {
       const res = await fetch(`${API_URL}/rooms`);
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${res.status} ${res.statusText}. Please make sure the backend server is running on port 5000.`);
+      }
       const data = await res.json();
       setRooms(data.rooms || []);
-    } catch {
-      setError("Failed to fetch study rooms.");
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch study rooms.");
     } finally {
       setLoading(false);
     }

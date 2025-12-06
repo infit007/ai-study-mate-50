@@ -26,10 +26,15 @@ const StudyRooms = () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/rooms`);
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${res.status} ${res.statusText}. Please make sure the backend server is running.`);
+      }
       const data = await res.json();
       setRooms(data.rooms || []);
-    } catch (err) {
-      setError("Failed to fetch rooms.");
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch rooms.");
     } finally {
       setLoading(false);
     }
@@ -52,14 +57,19 @@ const StudyRooms = () => {
         },
         body: JSON.stringify({ name, subject, maxParticipants }),
       });
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${res.status} ${res.statusText}. Please make sure the backend server is running.`);
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create room");
       setName("");
       setSubject("");
       setMaxParticipants(5);
       fetchRooms();
-    } catch (err) {
-      setError(err.message);
+    } catch (err: any) {
+      setError(err.message || "Failed to create room. Please try again.");
     } finally {
       setCreating(false);
     }
@@ -75,12 +85,17 @@ const StudyRooms = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${res.status} ${res.statusText}. Please make sure the backend server is running.`);
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to join room");
       fetchRooms();
       navigate(`/rooms/${roomId}`);
-    } catch (err) {
-      setError(err.message);
+    } catch (err: any) {
+      setError(err.message || "Failed to join room. Please try again.");
     } finally {
       setJoining("");
     }
@@ -96,11 +111,16 @@ const StudyRooms = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${res.status} ${res.statusText}. Please make sure the backend server is running.`);
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to delete room");
       fetchRooms();
-    } catch (err) {
-      setError(err.message);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete room. Please try again.");
     }
   };
 
@@ -129,12 +149,17 @@ const StudyRooms = () => {
           isPrivate: editIsPrivate,
         }),
       });
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${res.status} ${res.statusText}. Please make sure the backend server is running.`);
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update room");
       setEditingRoom(null);
       fetchRooms();
-    } catch (err) {
-      setError(err.message);
+    } catch (err: any) {
+      setError(err.message || "Failed to update room. Please try again.");
     }
   };
 

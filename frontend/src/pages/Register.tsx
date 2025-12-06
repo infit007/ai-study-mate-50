@@ -23,6 +23,14 @@ const Register = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),
       });
+      
+      // Check if response is JSON
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        throw new Error(`Server error: ${res.status} ${res.statusText}. Please make sure the backend server is running on port 5000.`);
+      }
+      
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
       setSuccess("Registration successful! You can now log in.");
@@ -30,7 +38,7 @@ const Register = () => {
       localStorage.setItem("user", JSON.stringify(data.user));
       navigate("/"); // Redirect to home page
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }
