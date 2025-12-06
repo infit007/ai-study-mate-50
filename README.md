@@ -51,10 +51,11 @@ A modern, collaborative study platform that combines AI-powered learning assista
 2. **Install dependencies**
    ```bash
    # Frontend dependencies
+   cd frontend
    npm install
    
    # Backend dependencies
-   cd backend
+   cd ../backend
    npm install
    ```
 
@@ -74,6 +75,7 @@ A modern, collaborative study platform that combines AI-powered learning assista
    npm run dev
    
    # Terminal 2: Start frontend
+   cd frontend
    npm run dev
    ```
 

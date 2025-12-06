@@ -11,8 +11,13 @@ node_modules
 dist
 dist-ssr
 *.local
+<<<<<<< HEAD
 
 # VS Code settings
+=======
+*.env
+# Editor directories and files
+>>>>>>> a6d1de1b05747757da00ef1a4ac7a55527f71ff6
 .vscode/*
 !.vscode/extensions.json
 
@@ -22,6 +27,11 @@ dist-ssr
 *.ntvs*
 *.njsproj
 *.sln
+<<<<<<< HEAD
 
 # Vim swap files
 *.sw?
+=======
+*.sw?
+*.env
+>>>>>>> a6d1de1b05747757da00ef1a4ac7a55527f71ff6

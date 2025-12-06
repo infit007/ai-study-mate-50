@@ -1,0 +1,10 @@
+{
+    "mcpServers": {
+      "lmstudio": {
+        "command": "lmstudio-mcp",
+        "args": [],
+        "autoStart": true
+      }
+    }
+  }
+  
